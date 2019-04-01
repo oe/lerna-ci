@@ -1,0 +1,57 @@
+{
+  "name": "@evecalm/lerna-ci",
+  "version": "0.1.0",
+  "description": "A toolkit make it easy(with plain config) to manipulate(upload/download/exec command) server via ssh, can be used to deploy stuffs or CI/CD",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "repository": "https://github.com/oe/lerna-ci.git",
+  "author": "Saiya",
+  "license": "MIT",
+  "scripts": {
+    "dev": "ts-node test/index.ts",
+    "clean": "rimraf ./dist",
+    "prebuild": "yarn run lint && yarn run clean",
+    "build": "tsc",
+    "build:js": "babel ./src --out-dir dist --extensions \".ts\"",
+    "build:types": "tsc --emitDeclarationOnly",
+    "postpublish": "ts-node build/post-publish.ts",
+    "lint-message": "echo 'lint code before commit'",
+    "lint": "tslint -c tslint.json 'src/**/*.ts'"
+  },
+  "keywords": [
+    "deploy",
+    "ssh",
+    "ci/cd",
+    "upload"
+  ],
+  "husky": {
+    "hooks": {
+      "pre-commit": "yarn run lint-message && yarn run lint"
+    }
+  },
+  "dependencies": {
+    "deploy-toolkit": "^0.1.0"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.1.5",
+    "@babel/core": "^7.1.6",
+    "@babel/plugin-proposal-class-properties": "^7.1.0",
+    "@babel/plugin-proposal-object-rest-spread": "^7.0.0",
+    "@babel/preset-env": "^7.1.6",
+    "@babel/preset-typescript": "^7.1.0",
+    "@types/fs-extra": "^5.0.4",
+    "@types/node": "8",
+    "@types/ssh2": "^0.5.36",
+    "fs-extra": "^7.0.1",
+    "husky": "^1.1.4",
+    "rimraf": "^2.6.2",
+    "ts-node": "^7.0.1",
+    "tslint": "^5.11.0",
+    "tslint-config-prettier": "^1.16.0",
+    "tslint-config-standard": "^8.0.1",
+    "typescript": "^3.1.6"
+  },
+  "engines": {
+    "node": ">=8"
+  }
+}
