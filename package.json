@@ -26,11 +26,13 @@
   ],
   "husky": {
     "hooks": {
-      "pre-commit": "yarn run lint-message && yarn run lint"
+      "pre-commit": "yarn run lint-message && yarn run lint --fix"
     }
   },
   "dependencies": {
-    "deploy-toolkit": "^0.1.0"
+    "deploy-toolkit": "^0.1.0",
+    "fixpack": "^2.3.1",
+    "semver": "^6.0.0"
   },
   "devDependencies": {
     "@babel/cli": "^7.1.5",

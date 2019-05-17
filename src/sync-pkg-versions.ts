@@ -1,86 +1,24 @@
-import { runShellCmd } from 'deploy-toolkit'
+import { getAllPkgNames, getLatestVersion, EVerSource, IPkgFilter } from './utils'
 import { join } from 'path'
 import fs from 'fs'
-import { getConfig } from './config'
 
-/**
- * remove version in tag
- * @param tag tag name: @elements/list@1.2.3
- */
-function removeTagVersion(tag) {
-  return tag.replace(/@\d.*$/, '')
-}
 
-/**
- * get newest tag from remote git server
- */
-async function getLatestTag() {
-  // sync all tags from remote, and prune noexists tags in locale
-  await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'])
-  // get tags sort by tag version desc
-  const tags = await runShellCmd('git', [
-    'tag',
-    '-l',
-    '|',
-    'sort',
-    '-V',
-    '--reverse'
-  ])
-  return tags
-    .trim()
-    .split('\n')
-    .reduce((acc, cur) => {
-      const last = acc[acc.length - 1]
-      if (last && removeTagVersion(last) === removeTagVersion(cur)) return acc
-      acc.push(cur)
-      return acc
-    }, [] as string[])
-    .reduce((acc, cur) => {
-      const matches = /^((?:@[\w-]+\/)?[\w-]+)@(\d.*)$/.exec(cur)
-      if (matches) {
-        acc[matches[1]] = matches[2]
-      } else {
-        console.warn('[warning]unmatched tag', cur)
-      }
-      return acc
-    }, {} as { [k: string]: string })
-}
-
-async function getAllLocalPkgs() {
-  try {
-    const result = await runShellCmd('npx', ['lerna', 'list', '--json'])
-    return JSON.parse(
-      result
-        .split('\n')
-        .filter(l => /^[\s\[\]]/.test(l))
-        .join('\n')
-    )
-  } catch (error) {
-    console.warn('[lerna-ci]exec lerna failed', error)
-    const pkg = require(join(getConfig('projectRoot')!, './package.json'))
-    return [
-      {
-        name: pkg.name,
-        version: pkg.version,
-        private: pkg.private || false,
-        location: __dirname
-      }
-    ]
-  }
-}
-
-function updateDepsVersion(deps, versions) {
-  if (!deps) return
+function updateDepsVersion (deps, versions) {
+  let hasChanged = false
+  if (!deps) return hasChanged
   Object.keys(deps).forEach(k => {
-    if (k in versions) {
+    if (k in versions && deps[k] !== `^${versions[k]}`) {
       deps[k] = `^${versions[k]}`
+      hasChanged = true
     }
   })
+  return hasChanged
 }
 
-function updatePkg(pkgDigest, latestVersions) {
+function updatePkg (pkgDigest, latestVersions) {
   const pkgPath = join(pkgDigest.location, 'package.json')
   const pkg = require(pkgPath)
+  let hasChanged = false
   if (latestVersions[pkg.name]) {
     if (latestVersions[pkg.name] !== pkg.version) {
       console.log(
@@ -88,17 +26,21 @@ function updatePkg(pkgDigest, latestVersions) {
         pkg.version
         } => ${latestVersions[pkg.name]}`
       )
+      hasChanged = true
       pkg.version = latestVersions[pkg.name]
     }
   }
-  updateDepsVersion(pkg.devDependencies, latestVersions)
-  updateDepsVersion(pkg.dependencies, latestVersions)
-  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+  const devChanged = updateDepsVersion(pkg.devDependencies, latestVersions)
+  const depChnaged = updateDepsVersion(pkg.dependencies, latestVersions)
+  if (hasChanged || devChanged || depChnaged) {
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+  }
 }
 
-export async function syncPkgVersions() {
-  const latestVersions = await getLatestTag()
-  const allPkgs = await getAllLocalPkgs()
+export async function syncPkgVersions (verSource: EVerSource, filter?: IPkgFilter) {
+  let allPkgs = await getAllPkgNames()
+  if (filter) allPkgs = allPkgs.filter(filter)
+  const latestVersions = await getLatestVersion(verSource, allPkgs)
   allPkgs.forEach(item => updatePkg(item, latestVersions))
   console.log(
     `[sync pkg versions] Your local packages' versions have been updated to git tags`

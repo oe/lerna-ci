@@ -41,7 +41,7 @@ const config: IConfig = {}
 
 let isInited = false
 
-export function setup(cfg: IConfig = {}) {
+export function setup (cfg: IConfig = {}) {
   isInited = true
   const defaults: IConfig = {
     projectRoot: findFileRecursive('.git', process.cwd(), true),
@@ -62,7 +62,7 @@ export function setup(cfg: IConfig = {}) {
   }
 }
 
-export function getConfig(key: keyof IConfig) {
+export function getConfig (key: keyof IConfig) {
   if (!isInited) throw new Error('[lerna-ci] you need to call `setup` before get config')
 
   return config[key]
