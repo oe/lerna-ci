@@ -1,8 +1,9 @@
 {
-  "name": "@evecalm/lerna-ci",
+  "name": "lerna-ci",
   "version": "0.1.0",
   "description": "A toolkit make it easy(with plain config) to manipulate(upload/download/exec command) server via ssh, can be used to deploy stuffs or CI/CD",
   "main": "dist/index.js",
+  "module": "dist/index.es.js",
   "typings": "dist/index.d.ts",
   "repository": "https://github.com/oe/lerna-ci.git",
   "author": "Saiya",
@@ -11,12 +12,12 @@
     "dev": "ts-node test/index.ts",
     "clean": "rimraf ./dist",
     "prebuild": "yarn run lint && yarn run clean",
-    "build": "tsc",
+    "build": "rollup -c rollup.config.js",
     "build:js": "babel ./src --out-dir dist --extensions \".ts\"",
     "build:types": "tsc --emitDeclarationOnly",
     "postpublish": "ts-node build/post-publish.ts",
     "lint-message": "echo 'lint code before commit'",
-    "lint": "tslint -c tslint.json 'src/**/*.ts'"
+    "lint": "eslint './src/**/*.{ts,tsx}'"
   },
   "keywords": [
     "deploy",
@@ -30,6 +31,7 @@
     }
   },
   "dependencies": {
+    "@types/semver": "^6.0.0",
     "deploy-toolkit": "^0.1.0",
     "fixpack": "^2.3.1",
     "semver": "^6.0.0"
@@ -44,14 +46,18 @@
     "@types/fs-extra": "^5.0.4",
     "@types/node": "8",
     "@types/ssh2": "^0.5.36",
+    "@typescript-eslint/eslint-plugin": "^1.9.0",
+    "@typescript-eslint/parser": "^1.9.0",
+    "eslint": "^5.16.0",
     "fs-extra": "^7.0.1",
     "husky": "^1.1.4",
     "rimraf": "^2.6.2",
+    "rollup": "^1.12.4",
+    "rollup-plugin-babel": "^4.3.2",
+    "rollup-plugin-buble": "^0.19.6",
+    "rollup-plugin-typescript2": "^0.21.1",
     "ts-node": "^7.0.1",
-    "tslint": "^5.11.0",
-    "tslint-config-prettier": "^1.16.0",
-    "tslint-config-standard": "^8.0.1",
-    "typescript": "^3.1.6"
+    "typescript": "^3.4.5"
   },
   "engines": {
     "node": ">=8"

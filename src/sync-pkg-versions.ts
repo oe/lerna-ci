@@ -1,9 +1,13 @@
-import { getAllPkgNames, getLatestVersion, EVerSource, IPkgFilter } from './utils'
+import { getAllPkgNames, getLatestVersions, EVerSource, IPkgFilter, IPkgVersions, IPkgDigest } from './utils'
 import { join } from 'path'
 import fs from 'fs'
 
-
-function updateDepsVersion (deps, versions) {
+/**
+ * update deps versions, return true if any pkg's version updated
+ * @param deps orignial deps object
+ * @param versions latest package versions
+ */
+function updateDepsVersion (deps: IPkgVersions, versions: IPkgVersions) {
   let hasChanged = false
   if (!deps) return hasChanged
   Object.keys(deps).forEach(k => {
@@ -15,15 +19,22 @@ function updateDepsVersion (deps, versions) {
   return hasChanged
 }
 
-function updatePkg (pkgDigest, latestVersions) {
+/**
+ * update a single pkg's package.json, return true if any things updated
+ * @param pkgDigest a single pkg's digest info 
+ * @param latestVersions lastest version of all locale packages
+ * @param isValidate if true just validate whether package need to update, and won't update its package.json file
+ */
+function updatePkg (pkgDigest: IPkgDigest, latestVersions: IPkgVersions, isValidate?: boolean) {
   const pkgPath = join(pkgDigest.location, 'package.json')
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pkg = require(pkgPath)
   let hasChanged = false
   if (latestVersions[pkg.name]) {
     if (latestVersions[pkg.name] !== pkg.version) {
       console.log(
         `[sync pkg versions] update ${pkg.name}'s version from ${
-        pkg.version
+          pkg.version
         } => ${latestVersions[pkg.name]}`
       )
       hasChanged = true
@@ -33,17 +44,25 @@ function updatePkg (pkgDigest, latestVersions) {
   const devChanged = updateDepsVersion(pkg.devDependencies, latestVersions)
   const depChnaged = updateDepsVersion(pkg.dependencies, latestVersions)
   if (hasChanged || devChanged || depChnaged) {
-    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+    // write file only not in validation mode
+    if (!isValidate) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+    return true
   }
+  return false
 }
 
-export async function syncPkgVersions (verSource: EVerSource, filter?: IPkgFilter) {
+/**
+ * sync all local packages' version
+ *  return all packages' digest info that need to update (has been upated if isValidate is false)
+ * @param verSource how to get latest locale package version source: npm, git or both
+ * @param filter function to filter packages need to sync versions
+ * @param isValidate whether just validate package need to update
+ */
+export async function syncPkgVersions (verSource: EVerSource, filter?: IPkgFilter, isValidate?: boolean) {
   let allPkgs = await getAllPkgNames()
   if (filter) allPkgs = allPkgs.filter(filter)
-  const latestVersions = await getLatestVersion(verSource, allPkgs)
-  allPkgs.forEach(item => updatePkg(item, latestVersions))
-  console.log(
-    `[sync pkg versions] Your local packages' versions have been updated to git tags`
-  )
+  const latestVersions = await getLatestVersions(verSource, allPkgs)
+  const pkgsUpdated = allPkgs.filter(item => updatePkg(item, latestVersions, isValidate))
+  return pkgsUpdated
 }
 

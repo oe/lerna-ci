@@ -2,10 +2,19 @@ import { runShellCmd, findFileRecursive } from 'deploy-toolkit'
 import semver from 'semver'
 import path from 'path'
 
-export type IPkgFilter = (pkg: IPkgBasicInfo, index: number, arr: IPkgBasicInfo[]) => boolean
-
-export type EVerSource = 'all' | 'npm' | 'git'
-export interface IPkgBasicInfo {
+export type IPkgFilter = (pkg: IPkgDigest, index: number, arr: IPkgDigest[]) => boolean
+/**
+ * package version data source
+ */
+export const enum EVerSource {
+  /** both npm and git */
+  ALL = 'all',
+  /** from npm */
+  NPM = 'npm',
+  /** from git */
+  GIT = 'git'
+}
+export interface IPkgDigest {
   /** package name */
   name: string
   /** package version */
@@ -37,11 +46,12 @@ export async function getAllPkgNames (needPrivate = true, searchKwd = '') {
         .split('\n')
         .filter(l => /^[\s\[\]]/.test(l))
         .join('\n')
-    ) as IPkgBasicInfo[]
+    ) as IPkgDigest[]
   } catch (error) {
     console.warn('[lerna-ci]exec lerna failed', error)
     const defPkgPath = findFileRecursive('package.json', process.cwd())
     if (!defPkgPath) return []
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const pkg = require(defPkgPath)
     return [
       {
@@ -50,7 +60,7 @@ export async function getAllPkgNames (needPrivate = true, searchKwd = '') {
         private: pkg.private || false,
         location: path.dirname(defPkgPath)
       }
-    ]
+    ] as IPkgDigest[]
   }
 }
 
@@ -58,7 +68,7 @@ export async function getAllPkgNames (needPrivate = true, searchKwd = '') {
  * remove version in tag
  * @param tag tag name: @elements/list@1.2.3
  */
-function removeTagVersion (tag) {
+function removeTagVersion (tag: string) {
   return tag.replace(/@\d.*$/, '')
 }
 
@@ -95,11 +105,14 @@ export async function getLatestVerFromGit () {
         console.warn('[warning]unmatched tag', cur)
       }
       return acc
-    }, {} as IPkgVersions)
+    }, {}) as IPkgVersions
 }
 
-
-export async function getLatestVerFromNpm (pkgs: IPkgBasicInfo[]) {
+/**
+ * get versions from npm server
+ * @param pkgs pkgs need to version info
+ */
+export async function getLatestVersFromNpm (pkgs: IPkgDigest[]) {
   const pkgNames = pkgs.map(item => item.name)
   const result: IPkgVersions = {}
   while (pkgNames.length) {
@@ -115,32 +128,21 @@ export async function getLatestVerFromNpm (pkgs: IPkgBasicInfo[]) {
   return result
 }
 
-export async function getLatestVerInner (pkgs) {
-  const npmVers = await getLatestVerFromNpm(pkgs)
-  const gitVers = await getLatestVerFromGit()
-  let keys = [...Object.keys(npmVers), ...Object.keys(gitVers)]
-  keys = keys.filter((item, idx) => keys.indexOf(item) === idx)
-  return keys.reduce((acc, key) => {
-    const nv = npmVers[key]
-    const gv = gitVers[key]
-    if (nv && gv) {
-      acc[key] = semver.compare(nv, gv) > 0 ? nv : gv
-    } else {
-      acc[key] = nv || gv
-    }
-    return acc
-  }, {} as IPkgVersions)
-}
-
-
-export async function getLatestVersion (verSource: EVerSource, pkgs: IPkgBasicInfo[]) {
+/**
+ * get versions from remote server
+ * @param verSource version source: from git, npm or both
+ * @param pkgs packages need version info
+ */
+export async function getLatestVersions (verSource: EVerSource, pkgs: IPkgDigest[]) {
+  if (!pkgs.length) return {}
   let npmVers: IPkgVersions = {}
-  if (verSource !== 'git') npmVers = await getLatestVerFromNpm(pkgs)
+  if (verSource !== EVerSource.GIT) npmVers = await getLatestVersFromNpm(pkgs)
   let gitVers: IPkgVersions = {}
-  if (verSource !== 'npm') gitVers = await getLatestVerFromGit()
+  if (verSource !== EVerSource.NPM) gitVers = await getLatestVerFromGit()
   let keys = [...Object.keys(npmVers), ...Object.keys(gitVers)]
   keys = keys.filter((item, idx) => keys.indexOf(item) === idx)
-  return keys.reduce((acc, key) => {
+  const vers: IPkgVersions = {}
+  keys.reduce((acc, key) => {
     const nv = npmVers[key]
     const gv = gitVers[key]
     if (nv && gv) {
@@ -149,5 +151,11 @@ export async function getLatestVersion (verSource: EVerSource, pkgs: IPkgBasicIn
       acc[key] = nv || gv
     }
     return acc
-  }, {} as IPkgVersions)
+  }, vers)
+  const result: IPkgVersions = {}
+  pkgs.reduce((acc, item) => {
+    if (vers[item.name]) acc[item.name] = vers[item.name]
+    return acc
+  }, result)
+  return result
 }

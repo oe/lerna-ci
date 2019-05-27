@@ -57,7 +57,8 @@ export function setup (cfg: IConfig = {}) {
   }
   Object.assign(config, defaults, cfg)
   // append `[skip ci]` if it's missing
-  if (!/\[skip ci\]/.test(config.releaseCommitMessage!)) {
+  // @ts-ignore
+  if (!/\[skip ci\]/.test(config.releaseCommitMessage)) {
     config.releaseCommitMessage += '[skip ci]'
   }
 }

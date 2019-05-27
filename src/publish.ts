@@ -1,7 +1,5 @@
-import { runShellCmd } from 'deploy-toolkit'
+// import { runShellCmd } from 'deploy-toolkit'
 
-
-
-export function publish() {
-  // xxx
-}
+// export function publish () {
+//   // xxx
+// }

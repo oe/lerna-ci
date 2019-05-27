@@ -35,6 +35,7 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
+.rpt2_cache
 
 # TypeScript v1 declaration files
 typings/
@@ -53,6 +54,7 @@ typings/
 
 # Yarn Integrity file
 .yarn-integrity
+dist
 
 # dotenv environment variables file
 .env
