@@ -13,13 +13,14 @@
     "clean": "rimraf ./dist",
     "prebuild": "yarn run lint && yarn run clean",
     "build": "rollup -c rollup.config.js",
-    "postpublish": "ts-node build/post-publish.ts",
     "lint-message": "echo 'lint code before commit'",
     "lint": "eslint './src/**/*.{ts,tsx}'"
   },
   "keywords": [
     "deploy",
     "ssh",
+    "monorepo",
+    "lerna",
     "ci/cd",
     "upload"
   ],
