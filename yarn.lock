@@ -1247,10 +1247,10 @@ delegates@^1.0.0:
   resolved "https://registry.yarnpkg.com/delegates/-/delegates-1.0.0.tgz#84c6e159b81904fdca59a0ef44cd870d31250f9a"
   integrity sha1-hMbhWbgZBP3KWaDvRM2HDTElD5o=
 
-deploy-toolkit@^0.1.0:
-  version "0.1.0"
-  resolved "http://npm.landray.com.cn/deploy-toolkit/-/deploy-toolkit-0.1.0.tgz#308a17c488fcd2de016caa96ee8d1a6fef2e1b7b"
-  integrity sha1-MIoXxIj80t4BbKqW7o0ab+8uG3s=
+deploy-toolkit@^0.1.1:
+  version "0.1.1"
+  resolved "http://npm.landray.com.cn/deploy-toolkit/-/deploy-toolkit-0.1.1.tgz#98c7537c7f8b177a748a9a5689b8b9989ba95bff"
+  integrity sha1-mMdTfH+LF3p0ippWibi5mJupW/8=
   dependencies:
     "@types/glob" "^7.1.1"
     glob "^7.1.3"

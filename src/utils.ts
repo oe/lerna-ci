@@ -26,6 +26,7 @@ export interface IPkgDigest {
 }
 
 export interface IPkgVersions {
+  /** package name: package version no.(without `v`) */
   [k: string]: string
 }
 
@@ -34,7 +35,7 @@ export interface IPkgVersions {
  * @param needPrivate whether get private package
  * @param searchKwd filter package name which contain searchKwd
  */
-export async function getAllPkgNames (needPrivate = true, searchKwd = '') {
+export async function getAllPkgDigest (needPrivate = true, searchKwd = '') {
   const isWin = /^win/.test(process.platform)
   const args = ['lerna', 'list', '--json']
   if (needPrivate) args.push('--all')
@@ -75,7 +76,7 @@ function removeTagVersion (tag: string) {
 /**
  * get newest tag from remote git server
  */
-export async function getLatestVerFromGit () {
+export async function getLatestPkgVersFromGit () {
   // sync all tags from remote, and prune noexists tags in locale
   await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'])
   // get tags sort by tag version desc
@@ -112,8 +113,7 @@ export async function getLatestVerFromGit () {
  * get versions from npm server
  * @param pkgs pkgs need to version info
  */
-export async function getLatestVersFromNpm (pkgs: IPkgDigest[]) {
-  const pkgNames = pkgs.map(item => item.name)
+export async function getLatestVersFromNpm (pkgNames: string[]) {
   const result: IPkgVersions = {}
   while (pkgNames.length) {
     const items = pkgNames.splice(-10)
@@ -136,9 +136,9 @@ export async function getLatestVersFromNpm (pkgs: IPkgDigest[]) {
 export async function getLatestVersions (verSource: EVerSource, pkgs: IPkgDigest[]) {
   if (!pkgs.length) return {}
   let npmVers: IPkgVersions = {}
-  if (verSource !== EVerSource.GIT) npmVers = await getLatestVersFromNpm(pkgs)
+  if (verSource !== EVerSource.GIT) npmVers = await getLatestVersFromNpm(pkgs.map(item => item.name))
   let gitVers: IPkgVersions = {}
-  if (verSource !== EVerSource.NPM) gitVers = await getLatestVerFromGit()
+  if (verSource !== EVerSource.NPM) gitVers = await getLatestPkgVersFromGit()
   let keys = [...Object.keys(npmVers), ...Object.keys(gitVers)]
   keys = keys.filter((item, idx) => keys.indexOf(item) === idx)
   const vers: IPkgVersions = {}

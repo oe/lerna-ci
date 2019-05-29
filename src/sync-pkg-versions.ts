@@ -1,4 +1,12 @@
-import { getAllPkgNames, getLatestVersions, EVerSource, IPkgFilter, IPkgVersions, IPkgDigest } from './utils'
+import {
+  getAllPkgDigest,
+  getLatestVersions,
+  getLatestVersFromNpm,
+  EVerSource,
+  IPkgFilter,
+  IPkgVersions,
+  IPkgDigest
+} from './utils'
 import { join } from 'path'
 import fs from 'fs'
 
@@ -42,8 +50,9 @@ function updatePkg (pkgDigest: IPkgDigest, latestVersions: IPkgVersions, isValid
     }
   }
   const devChanged = updateDepsVersion(pkg.devDependencies, latestVersions)
+  const peerChanged = updateDepsVersion(pkg.peerDependencies, latestVersions)
   const depChnaged = updateDepsVersion(pkg.dependencies, latestVersions)
-  if (hasChanged || devChanged || depChnaged) {
+  if (hasChanged || devChanged || depChnaged || peerChanged) {
     // write file only not in validation mode
     if (!isValidate) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
     return true
@@ -59,10 +68,20 @@ function updatePkg (pkgDigest: IPkgDigest, latestVersions: IPkgVersions, isValid
  * @param isValidate whether just validate package need to update
  */
 export async function syncPkgVersions (verSource: EVerSource, filter?: IPkgFilter, isValidate?: boolean) {
-  let allPkgs = await getAllPkgNames()
+  let allPkgs = await getAllPkgDigest()
   if (filter) allPkgs = allPkgs.filter(filter)
   const latestVersions = await getLatestVersions(verSource, allPkgs)
   const pkgsUpdated = allPkgs.filter(item => updatePkg(item, latestVersions, isValidate))
   return pkgsUpdated
 }
 
+/**
+ * 
+ * @param pkgNames pkg names from remote npm regisetry but used in local packages
+ */
+export async function syncRemotePkgVersions (pkgNames: string[]) {
+  let allPkgs = await getAllPkgDigest()
+  const latestVersions = await getLatestVersFromNpm(pkgNames)
+  const pkgsUpdated = allPkgs.filter(item => updatePkg(item, latestVersions))
+  return pkgsUpdated
+}

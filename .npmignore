@@ -3,4 +3,6 @@ build
 test
 *.json
 .*
+.rpt2_cache
 *.log
+rollup.config.js

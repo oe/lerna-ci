@@ -1,6 +1,6 @@
 {
   "name": "lerna-ci",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "A toolkit make it easy(with plain config) to manipulate(upload/download/exec command) server via ssh, can be used to deploy stuffs or CI/CD",
   "main": "dist/index.js",
   "module": "dist/index.es.js",
@@ -13,8 +13,6 @@
     "clean": "rimraf ./dist",
     "prebuild": "yarn run lint && yarn run clean",
     "build": "rollup -c rollup.config.js",
-    "build:js": "babel ./src --out-dir dist --extensions \".ts\"",
-    "build:types": "tsc --emitDeclarationOnly",
     "postpublish": "ts-node build/post-publish.ts",
     "lint-message": "echo 'lint code before commit'",
     "lint": "eslint './src/**/*.{ts,tsx}'"
@@ -32,7 +30,7 @@
   },
   "dependencies": {
     "@types/semver": "^6.0.0",
-    "deploy-toolkit": "^0.1.0",
+    "deploy-toolkit": "^0.1.1",
     "fixpack": "^2.3.1",
     "semver": "^6.0.0"
   },
