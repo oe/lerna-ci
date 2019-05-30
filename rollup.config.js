@@ -7,6 +7,12 @@ const pkg = require('./package.json')
 
 export default {
   input: 'src/index.ts',
+  external: [
+    "@types/semver",
+    "deploy-toolkit",
+    "fixpack",
+    "semver"
+  ],
   output: [
     {
       name: 'lerna-ci',
@@ -28,7 +34,6 @@ export default {
     }
   ],
   plugins: [
-    // resolve(),
     typescript({
       tsconfigOverride: {
         compilerOptions: {
