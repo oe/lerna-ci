@@ -1,4 +1,4 @@
-import fixpack from 'fixpack'
+import fixpack from './fixpack'
 import path from 'path'
 import { getAllPkgDigest, IPkgFilter } from './utils'
 

@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "module": "dist/index.es.js",
   "typings": "dist/index.d.ts",
+  "bin": "./dist/bin/lerna-ci",
   "repository": "https://github.com/oe/lerna-ci.git",
   "author": "Saiya",
   "license": "MIT",
@@ -31,8 +32,10 @@
   },
   "dependencies": {
     "@types/semver": "^6.0.0",
+    "alce": "^1.2.0",
+    "cosmiconfig": "^5.2.1",
     "deploy-toolkit": "^0.1.1",
-    "fixpack": "^2.3.1",
+    "extend-object": "^1.0.0",
     "semver": "^6.0.0"
   },
   "devDependencies": {

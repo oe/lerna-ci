@@ -128,6 +128,14 @@ export async function getLatestVersFromNpm (pkgNames: string[]) {
   return result
 }
 
+function maxVersion (...vers: (string | undefined)[]) {
+  const def = '0.0.0'
+  return vers.reduce((res, cur) => {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    return semver.compare(res!, cur || def) > 0 ? res : cur || def
+  }, def)
+}
+
 /**
  * get versions from remote server
  * @param verSource version source: from git, npm or both
@@ -135,21 +143,26 @@ export async function getLatestVersFromNpm (pkgNames: string[]) {
  */
 export async function getLatestVersions (verSource: EVerSource, pkgs: IPkgDigest[]) {
   if (!pkgs.length) return {}
+  // local package versions
+  const localVers: IPkgVersions = {}
+  pkgs.reduce((acc, cur) => {
+    acc[cur.name] = cur.version
+    return acc
+  }, localVers)
+
+  // versions info from npm
   let npmVers: IPkgVersions = {}
   if (verSource !== EVerSource.GIT) npmVers = await getLatestVersFromNpm(pkgs.map(item => item.name))
+
+  // versions info from git
   let gitVers: IPkgVersions = {}
   if (verSource !== EVerSource.NPM) gitVers = await getLatestPkgVersFromGit()
   let keys = [...Object.keys(npmVers), ...Object.keys(gitVers)]
   keys = keys.filter((item, idx) => keys.indexOf(item) === idx)
   const vers: IPkgVersions = {}
   keys.reduce((acc, key) => {
-    const nv = npmVers[key]
-    const gv = gitVers[key]
-    if (nv && gv) {
-      acc[key] = semver.compare(nv, gv) > 0 ? nv : gv
-    } else {
-      acc[key] = nv || gv
-    }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    acc[key] = maxVersion(npmVers[key], gitVers[key], localVers[key])!
     return acc
   }, vers)
   const result: IPkgVersions = {}

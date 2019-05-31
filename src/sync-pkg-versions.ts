@@ -67,7 +67,7 @@ function updatePkg (pkgDigest: IPkgDigest, latestVersions: IPkgVersions, isValid
  * @param filter function to filter packages need to sync versions
  * @param isValidate whether just validate package need to update
  */
-export async function syncPkgVersions (verSource: EVerSource, filter?: IPkgFilter, isValidate?: boolean) {
+export async function syncLocalPkgVersions (verSource: EVerSource, filter?: IPkgFilter, isValidate?: boolean) {
   let allPkgs = await getAllPkgDigest()
   if (filter) allPkgs = allPkgs.filter(filter)
   const latestVersions = await getLatestVersions(verSource, allPkgs)
