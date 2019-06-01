@@ -1,6 +1,6 @@
 {
   "name": "lerna-ci",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "A toolkit make it easy(with plain config) to manipulate(upload/download/exec command) server via ssh, can be used to deploy stuffs or CI/CD",
   "main": "dist/index.js",
   "module": "dist/index.es.js",
