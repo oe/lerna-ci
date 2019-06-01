@@ -37,7 +37,10 @@ export interface IPkgVersions {
  */
 export async function getAllPkgDigest (needPrivate = true, searchKwd = '') {
   const isWin = /^win/.test(process.platform)
-  const args = ['lerna', 'list', '--json']
+  /**
+   * don't install from npm remote if lerna not installed
+   */
+  const args = ['--no-install', 'lerna', 'list', '--json']
   if (needPrivate) args.push('--all')
   if (searchKwd) args.push(searchKwd)
   try {
@@ -110,6 +113,23 @@ export async function getLatestPkgVersFromGit () {
 }
 
 /**
+ * get single package verison info from npm( via yarn cli )
+ * @param name package name
+ */
+async function getVersionFromNpm (name: string): Promise<string | undefined> {
+  try {
+    const verStr = await runShellCmd('yarn', ['info', name, 'version', '--json'])
+    if (!verStr) return
+    const ver = JSON.parse(verStr)
+    if (ver.type !== 'inspect') return
+    return ver.data
+  } catch (error) {
+    console.warn(`[lerna-ci] failed to get version of ${name} from npm`, error)
+    return
+  }
+}
+
+/**
  * get versions from npm server
  * @param pkgs pkgs need to version info
  */
@@ -117,12 +137,10 @@ export async function getLatestVersFromNpm (pkgNames: string[]) {
   const result: IPkgVersions = {}
   while (pkgNames.length) {
     const items = pkgNames.splice(-10)
-    const verStrings = await Promise.all(items.map(name => runShellCmd('yarn', ['info', name, 'version', '--json'])))
-    verStrings.forEach((verStr, idx) => {
-      if (!verStr) return
-      const ver = JSON.parse(verStr)
-      if (ver.type !== 'inspect') return
-      result[items[idx]] = ver.data
+    const vers = await Promise.all(items.map(getVersionFromNpm))
+    vers.forEach((ver, idx) => {
+      if (!ver) return
+      result[items[idx]] = ver
     })
   }
   return result
