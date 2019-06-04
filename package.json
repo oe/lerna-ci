@@ -1,7 +1,7 @@
 {
   "name": "lerna-ci",
   "version": "0.0.4",
-  "description": "A toolkit make it easy(with plain config) to manipulate(upload/download/exec command) server via ssh, can be used to deploy stuffs or CI/CD",
+  "description": "lerna  toolkit  for ci integration with gitlab",
   "main": "dist/index.js",
   "module": "dist/index.es.js",
   "typings": "dist/index.d.ts",
@@ -19,12 +19,9 @@
     "lint": "eslint './src/**/*.{ts,tsx}'"
   },
   "keywords": [
-    "deploy",
-    "ssh",
     "monorepo",
     "lerna",
-    "ci/cd",
-    "upload"
+    "ci/cd"
   ],
   "husky": {
     "hooks": {

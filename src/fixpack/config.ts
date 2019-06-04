@@ -10,9 +10,15 @@ export default {
   "requiredOnPrivate": [],
   "sortToTop": [
     "name",
-    "description",
     "version",
-    "author"
+    "description",
+    "author",
+    "repository",
+    "main",
+    "module",
+    "typing",
+    "bin",
+    "scripts"
   ],
   "sortedSubItems": [
     "dependencies",

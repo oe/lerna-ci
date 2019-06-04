@@ -91,6 +91,7 @@ export async function getLatestPkgVersFromGit () {
     '-V',
     '--reverse'
   ])
+  if (!tags) return {}
   return tags
     .trim()
     .split('\n')
@@ -105,8 +106,6 @@ export async function getLatestPkgVersFromGit () {
       const matches = tagVerReg.exec(cur)
       if (matches) {
         acc[matches[1]] = matches[2]
-      } else {
-        console.warn('[warning]unmatched tag', cur)
       }
       return acc
     }, {}) as IPkgVersions

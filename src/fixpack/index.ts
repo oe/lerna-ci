@@ -1,4 +1,10 @@
-
+/**
+ * fixpack
+ * created by henrikjoreteg <https://github.com/henrikjoreteg>
+ * modified from https://github.com/henrikjoreteg/fixpack:
+ *    1. added an option `newline` to config whether add new line on EOF
+ *       without new line by default(wthich be the opposite of original repo)
+ */
 import ALCE from 'alce'
 import extend from 'extend-object'
 import fs from 'fs'
