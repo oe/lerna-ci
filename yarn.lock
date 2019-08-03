@@ -1011,6 +1011,11 @@ callsites@^3.0.0:
   resolved "http://npm.landray.com.cn/callsites/-/callsites-3.1.0.tgz#b3630abd8943432f54b3f0519238e33cd7df2f73"
   integrity sha1-s2MKvYlDQy9Us/BRkjjjPNffL3M=
 
+camelcase@^5.0.0:
+  version "5.3.1"
+  resolved "http://npm.landray.com.cn:80/camelcase/-/camelcase-5.3.1.tgz#e3c9b31569e106811df242f715725a1f4c494320"
+  integrity sha1-48mzFWnhBoEd8kL3FXJaH0xJQyA=
+
 caniuse-lite@^1.0.30000899:
   version "1.0.30000909"
   resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30000909.tgz#697e8f447ca5f758e7c6cef39ec429ce18b908d3"
@@ -1090,6 +1095,15 @@ cli-width@^2.0.0:
   version "2.2.0"
   resolved "http://npm.landray.com.cn/cli-width/-/cli-width-2.2.0.tgz#ff19ede8a9a5e579324147b0c11f0fbcbabed639"
   integrity sha1-/xnt6Kml5XkyQUewwR8PvLq+1jk=
+
+cliui@^5.0.0:
+  version "5.0.0"
+  resolved "http://npm.landray.com.cn:80/cliui/-/cliui-5.0.0.tgz#deefcfdb2e800784aa34f46fa08e06851c7bbbc5"
+  integrity sha1-3u/P2y6AB4SqNPRvoI4GhRx7u8U=
+  dependencies:
+    string-width "^3.1.0"
+    strip-ansi "^5.2.0"
+    wrap-ansi "^5.1.0"
 
 code-point-at@^1.0.0:
   version "1.1.0"
@@ -1204,6 +1218,11 @@ debug@^4.1.0:
   integrity sha512-heNPJUJIqC+xB6ayLAMHaIrmN9HKa7aQO8MGqKpvCA+uJYVcvR6l5kgdrhRuwPFHU7P5/A1w0BjByPHwpfTDKg==
   dependencies:
     ms "^2.1.1"
+
+decamelize@^1.2.0:
+  version "1.2.0"
+  resolved "http://npm.landray.com.cn:80/decamelize/-/decamelize-1.2.0.tgz#f6534d15148269b20352e7bee26f501f9a191290"
+  integrity sha1-9lNNFRSCabIDUue+4m9QH5oZEpA=
 
 decode-uri-component@^0.2.0:
   version "0.2.0"
@@ -1609,6 +1628,11 @@ gauge@~2.7.3:
     strip-ansi "^3.0.1"
     wide-align "^1.1.0"
 
+get-caller-file@^2.0.1:
+  version "2.0.5"
+  resolved "http://npm.landray.com.cn:80/get-caller-file/-/get-caller-file-2.0.5.tgz#4f94412a82db32f36e3b0b9741f8a97feb031f7e"
+  integrity sha1-T5RBKoLbMvNuOwuXQfipf+sDH34=
+
 get-stdin@^6.0.0:
   version "6.0.0"
   resolved "https://registry.yarnpkg.com/get-stdin/-/get-stdin-6.0.0.tgz#9e09bf712b360ab9225e812048f71fde9c89657b"
@@ -1775,6 +1799,11 @@ imurmurhash@^0.1.4:
   resolved "http://npm.landray.com.cn/imurmurhash/-/imurmurhash-0.1.4.tgz#9218b9b2b928a238b13dc4fb6b6d576f231453ea"
   integrity sha1-khi5srkoojixPcT7a21XbyMUU+o=
 
+in-publish@^2.0.0:
+  version "2.0.0"
+  resolved "http://npm.landray.com.cn/in-publish/-/in-publish-2.0.0.tgz#e20ff5e3a2afc2690320b6dc552682a9c7fadf51"
+  integrity sha1-4g/146KvwmkDILbcVSaCqcf631E=
+
 inflight@^1.0.4:
   version "1.0.6"
   resolved "https://registry.yarnpkg.com/inflight/-/inflight-1.0.6.tgz#49bd6331d7d02d0c09bc910a1075ba8165b56df9"
@@ -1818,6 +1847,11 @@ invariant@^2.2.2:
   integrity sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA==
   dependencies:
     loose-envify "^1.0.0"
+
+invert-kv@^2.0.0:
+  version "2.0.0"
+  resolved "http://npm.landray.com.cn:80/invert-kv/-/invert-kv-2.0.0.tgz#7393f5afa59ec9ff5f67a27620d11c226e3eec02"
+  integrity sha1-c5P1r6Weyf9fZ6J2INEcIm4+7AI=
 
 is-accessor-descriptor@^0.1.6:
   version "0.1.6"
@@ -2081,6 +2115,13 @@ kind-of@^6.0.0, kind-of@^6.0.2:
   resolved "https://registry.yarnpkg.com/kind-of/-/kind-of-6.0.2.tgz#01146b36a6218e64e58f3a8d66de5d7fc6f6d051"
   integrity sha512-s5kLOcnH0XqDO+FvuaLX8DDjZ18CGFk7VygH40QoKPUQhW4e2rvM0rwUq0t8IQDOwYSeLK01U90OjzBTme2QqA==
 
+lcid@^2.0.0:
+  version "2.0.0"
+  resolved "http://npm.landray.com.cn:80/lcid/-/lcid-2.0.0.tgz#6ef5d2df60e52f82eb228a4c373e8d1f397253cf"
+  integrity sha1-bvXS32DlL4LrIopMNz6NHzlyU88=
+  dependencies:
+    invert-kv "^2.0.0"
+
 levn@^0.3.0, levn@~0.3.0:
   version "0.3.0"
   resolved "http://npm.landray.com.cn/levn/-/levn-0.3.0.tgz#3b09924edf9f083c0490fdd4c0bc4421e04764ee"
@@ -2131,6 +2172,13 @@ make-error@^1.1.1:
   resolved "https://registry.yarnpkg.com/make-error/-/make-error-1.3.5.tgz#efe4e81f6db28cadd605c70f29c831b58ef776c8"
   integrity sha512-c3sIjNUow0+8swNwVpqoH4YCShKNFkMaw6oH1mNS2haDZQqkeZFlHS3dhoeEbKKmJB4vXpJucU6oH75aDYeE9g==
 
+map-age-cleaner@^0.1.1:
+  version "0.1.3"
+  resolved "http://npm.landray.com.cn:80/map-age-cleaner/-/map-age-cleaner-0.1.3.tgz#7d583a7306434c055fe474b0f45078e6e1b4b92a"
+  integrity sha1-fVg6cwZDTAVf5HSw9FB45uG0uSo=
+  dependencies:
+    p-defer "^1.0.0"
+
 map-cache@^0.2.2:
   version "0.2.2"
   resolved "https://registry.yarnpkg.com/map-cache/-/map-cache-0.2.2.tgz#c32abd0bd6525d9b051645bb4f26ac5dc98a0dbf"
@@ -2142,6 +2190,15 @@ map-visit@^1.0.0:
   integrity sha1-7Nyo8TFE5mDxtb1B8S80edmN+48=
   dependencies:
     object-visit "^1.0.0"
+
+mem@^4.0.0:
+  version "4.3.0"
+  resolved "http://npm.landray.com.cn:80/mem/-/mem-4.3.0.tgz#461af497bc4ae09608cdb2e60eefb69bff744178"
+  integrity sha1-Rhr0l7xK4JYIzbLmDu+2m/90QXg=
+  dependencies:
+    map-age-cleaner "^0.1.1"
+    mimic-fn "^2.0.0"
+    p-is-promise "^2.0.0"
 
 micromatch@^3.1.10, micromatch@^3.1.4:
   version "3.1.10"
@@ -2166,6 +2223,11 @@ mimic-fn@^1.0.0:
   version "1.2.0"
   resolved "http://npm.landray.com.cn/mimic-fn/-/mimic-fn-1.2.0.tgz#820c86a39334640e99516928bd03fca88057d022"
   integrity sha1-ggyGo5M0ZA6ZUWkovQP8qIBX0CI=
+
+mimic-fn@^2.0.0:
+  version "2.1.0"
+  resolved "http://npm.landray.com.cn:80/mimic-fn/-/mimic-fn-2.1.0.tgz#7ed2c2ccccaf84d3ffcb7a69b57711fc2083401b"
+  integrity sha1-ftLCzMyvhNP/y3pptXcR/CCDQBs=
 
 minimatch@^3.0.4:
   version "3.0.4"
@@ -2423,6 +2485,15 @@ os-homedir@^1.0.0, os-homedir@^1.0.1:
   resolved "https://registry.yarnpkg.com/os-homedir/-/os-homedir-1.0.2.tgz#ffbc4988336e0e833de0c168c7ef152121aa7fb3"
   integrity sha1-/7xJiDNuDoM94MFox+8VISGqf7M=
 
+os-locale@^3.1.0:
+  version "3.1.0"
+  resolved "http://npm.landray.com.cn:80/os-locale/-/os-locale-3.1.0.tgz#a802a6ee17f24c10483ab9935719cef4ed16bf1a"
+  integrity sha1-qAKm7hfyTBBIOrmTVxnO9O0Wvxo=
+  dependencies:
+    execa "^1.0.0"
+    lcid "^2.0.0"
+    mem "^4.0.0"
+
 os-tmpdir@^1.0.0, os-tmpdir@~1.0.2:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/os-tmpdir/-/os-tmpdir-1.0.2.tgz#bbe67406c79aa85c5cfec766fe5734555dfa1274"
@@ -2445,10 +2516,20 @@ output-file-sync@^2.0.0:
     is-plain-obj "^1.1.0"
     mkdirp "^0.5.1"
 
+p-defer@^1.0.0:
+  version "1.0.0"
+  resolved "http://npm.landray.com.cn:80/p-defer/-/p-defer-1.0.0.tgz#9f6eb182f6c9aa8cd743004a7d4f96b196b0fb0c"
+  integrity sha1-n26xgvbJqozXQwBKfU+WsZaw+ww=
+
 p-finally@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/p-finally/-/p-finally-1.0.0.tgz#3fbcfb15b899a44123b34b6dcc18b724336a2cae"
   integrity sha1-P7z7FbiZpEEjs0ttzBi3JDNqLK4=
+
+p-is-promise@^2.0.0:
+  version "2.1.0"
+  resolved "http://npm.landray.com.cn:80/p-is-promise/-/p-is-promise-2.1.0.tgz#918cebaea248a62cf7ffab8e3bca8c5f882fc42e"
+  integrity sha1-kYzrrqJIpiz3/6uOO8qMX4gvxC4=
 
 p-limit@^2.0.0:
   version "2.0.0"
@@ -2724,6 +2805,16 @@ repeat-string@^1.6.1:
   resolved "https://registry.yarnpkg.com/repeat-string/-/repeat-string-1.6.1.tgz#8dcae470e1c88abc2d600fff4a776286da75e637"
   integrity sha1-jcrkcOHIirwtYA//Sndihtp15jc=
 
+require-directory@^2.1.1:
+  version "2.1.1"
+  resolved "http://npm.landray.com.cn:80/require-directory/-/require-directory-2.1.1.tgz#8c64ad5fd30dab1c976e2344ffe7f792a6a6df42"
+  integrity sha1-jGStX9MNqxyXbiNE/+f3kqam30I=
+
+require-main-filename@^2.0.0:
+  version "2.0.0"
+  resolved "http://npm.landray.com.cn:80/require-main-filename/-/require-main-filename-2.0.0.tgz#d0b329ecc7cc0f61649f62215be69af54aa8989b"
+  integrity sha1-0LMp7MfMD2Fkn2IhW+aa9UqomJs=
+
 requireindex@^1.2.0:
   version "1.2.0"
   resolved "http://npm.landray.com.cn/requireindex/-/requireindex-1.2.0.tgz#3463cdb22ee151902635aa6c9535d4de9c2ef1ef"
@@ -2915,7 +3006,7 @@ semver@^6.0.0:
   resolved "http://npm.landray.com.cn/semver/-/semver-6.0.0.tgz#05e359ee571e5ad7ed641a6eec1e547ba52dea65"
   integrity sha1-BeNZ7lceWtftZBpu7B5Ue6Ut6mU=
 
-set-blocking@~2.0.0:
+set-blocking@^2.0.0, set-blocking@~2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/set-blocking/-/set-blocking-2.0.0.tgz#045f9782d011ae9a6803ddd382b24392b3d890f7"
   integrity sha1-BF+XgtARrppoA93TgrJDkrPYkPc=
@@ -3129,7 +3220,7 @@ string-width@^1.0.1:
     is-fullwidth-code-point "^2.0.0"
     strip-ansi "^4.0.0"
 
-string-width@^3.0.0:
+string-width@^3.0.0, string-width@^3.1.0:
   version "3.1.0"
   resolved "http://npm.landray.com.cn/string-width/-/string-width-3.1.0.tgz#22767be21b62af1081574306f69ac51b62203961"
   integrity sha1-InZ74htirxCBV0MG9prFG2IgOWE=
@@ -3159,7 +3250,7 @@ strip-ansi@^4.0.0:
   dependencies:
     ansi-regex "^3.0.0"
 
-strip-ansi@^5.1.0:
+strip-ansi@^5.0.0, strip-ansi@^5.1.0, strip-ansi@^5.2.0:
   version "5.2.0"
   resolved "http://npm.landray.com.cn/strip-ansi/-/strip-ansi-5.2.0.tgz#8c9a536feb6afc962bdfa5b104a5091c1ad9c0ae"
   integrity sha1-jJpTb+tq/JYr36WxBKUJHBrZwK4=
@@ -3382,6 +3473,11 @@ validate-npm-package-license@^3.0.1:
     spdx-correct "^3.0.0"
     spdx-expression-parse "^3.0.0"
 
+which-module@^2.0.0:
+  version "2.0.0"
+  resolved "http://npm.landray.com.cn:80/which-module/-/which-module-2.0.0.tgz#d9ef07dce77b9902b8a3a8fa4b31c3e3f7e6e87a"
+  integrity sha1-2e8H3Od7mQK4o6j6SzHD4/fm6Ho=
+
 which@^1.2.9:
   version "1.3.1"
   resolved "https://registry.yarnpkg.com/which/-/which-1.3.1.tgz#a45043d54f5805316da8d62f9f50918d3da70b0a"
@@ -3401,6 +3497,15 @@ wordwrap@~1.0.0:
   resolved "http://npm.landray.com.cn/wordwrap/-/wordwrap-1.0.0.tgz#27584810891456a4171c8d0226441ade90cbcaeb"
   integrity sha1-J1hIEIkUVqQXHI0CJkQa3pDLyus=
 
+wrap-ansi@^5.1.0:
+  version "5.1.0"
+  resolved "http://npm.landray.com.cn:80/wrap-ansi/-/wrap-ansi-5.1.0.tgz#1fd1f67235d5b6d0fee781056001bfb694c03b09"
+  integrity sha1-H9H2cjXVttD+54EFYAG/tpTAOwk=
+  dependencies:
+    ansi-styles "^3.2.0"
+    string-width "^3.0.0"
+    strip-ansi "^5.0.0"
+
 wrappy@1:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/wrappy/-/wrappy-1.0.2.tgz#b5243d8f3ec1aa35f1364605bc0d1036e30ab69f"
@@ -3413,10 +3518,40 @@ write@1.0.3:
   dependencies:
     mkdirp "^0.5.1"
 
+y18n@^4.0.0:
+  version "4.0.0"
+  resolved "http://npm.landray.com.cn:80/y18n/-/y18n-4.0.0.tgz#95ef94f85ecc81d007c264e190a120f0a3c8566b"
+  integrity sha1-le+U+F7MgdAHwmThkKEg8KPIVms=
+
 yallist@^3.0.0, yallist@^3.0.2:
   version "3.0.2"
   resolved "https://registry.yarnpkg.com/yallist/-/yallist-3.0.2.tgz#8452b4bb7e83c7c188d8041c1a837c773d6d8bb9"
   integrity sha1-hFK0u36Dx8GI2AQcGoN8dz1ti7k=
+
+yargs-parser@^13.1.0:
+  version "13.1.0"
+  resolved "http://npm.landray.com.cn:80/yargs-parser/-/yargs-parser-13.1.0.tgz#7016b6dd03e28e1418a510e258be4bff5a31138f"
+  integrity sha1-cBa23QPijhQYpRDiWL5L/1oxE48=
+  dependencies:
+    camelcase "^5.0.0"
+    decamelize "^1.2.0"
+
+yargs@^13.2.4:
+  version "13.2.4"
+  resolved "http://npm.landray.com.cn:80/yargs/-/yargs-13.2.4.tgz#0b562b794016eb9651b98bd37acf364aa5d6dc83"
+  integrity sha1-C1YreUAW65ZRuYvTes82SqXW3IM=
+  dependencies:
+    cliui "^5.0.0"
+    find-up "^3.0.0"
+    get-caller-file "^2.0.1"
+    os-locale "^3.1.0"
+    require-directory "^2.1.1"
+    require-main-filename "^2.0.0"
+    set-blocking "^2.0.0"
+    string-width "^3.0.0"
+    which-module "^2.0.0"
+    y18n "^4.0.0"
+    yargs-parser "^13.1.0"
 
 yn@^2.0.0:
   version "2.0.0"
