@@ -1,49 +1,49 @@
 export default {
-  "files": [
-    "package.json"
+  'files': [
+    'package.json'
   ],
-  "quiet": false,
-  "required": [
-    "name",
-    "version"
+  'quiet': false,
+  'required': [
+    'name',
+    'version'
   ],
-  "requiredOnPrivate": [],
-  "sortToTop": [
-    "name",
-    "version",
-    "description",
-    "author",
-    "repository",
-    "main",
-    "module",
-    "typing",
-    "bin",
-    "scripts"
+  'requiredOnPrivate': [],
+  'sortToTop': [
+    'name',
+    'version',
+    'description',
+    'author',
+    'repository',
+    'main',
+    'module',
+    'typing',
+    'bin',
+    'scripts'
   ],
-  "sortedSubItems": [
-    "dependencies",
-    "devDependencies",
-    "peerDependencies",
-    "optionalDependencies",
-    "jshintConfig",
-    "scripts",
-    "keywords"
+  'sortedSubItems': [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
+    'jshintConfig',
+    'scripts',
+    'keywords'
   ],
-  "warn": [
-    "description",
-    "author",
-    "repository",
-    "keywords",
-    "main",
-    "bugs",
-    "homepage",
-    "license"
+  'warn': [
+    'description',
+    'author',
+    'repository',
+    'keywords',
+    'main',
+    'bugs',
+    'homepage',
+    'license'
   ],
-  "warnOnPrivate": [
-    "name",
-    "version",
-    "description",
-    "main"
+  'warnOnPrivate': [
+    'name',
+    'version',
+    'description',
+    'main'
   ],
-  "wipe": false
+  'wipe': false
 }

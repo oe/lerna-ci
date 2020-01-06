@@ -2,6 +2,8 @@ import {
   getAllPkgDigest,
   getLatestVersions,
   getLatestVersFromNpm,
+  groupPkgNames,
+  uniqArray,
   EVerSource,
   IPkgFilter,
   IPkgVersions,
@@ -15,7 +17,7 @@ import fs from 'fs'
  * @param deps orignial deps object
  * @param versions latest package versions
  */
-function updateDepsVersion (deps: IPkgVersions, versions: IPkgVersions) {
+function updateDepsVersion(deps: IPkgVersions, versions: IPkgVersions) {
   let hasChanged = false
   if (!deps) return hasChanged
   Object.keys(deps).forEach(k => {
@@ -29,11 +31,15 @@ function updateDepsVersion (deps: IPkgVersions, versions: IPkgVersions) {
 
 /**
  * update a single pkg's package.json, return true if any things updated
- * @param pkgDigest a single pkg's digest info 
+ * @param pkgDigest a single pkg's digest info
  * @param latestVersions lastest version of all locale packages
  * @param isValidate if true just validate whether package need to update, and won't update its package.json file
  */
-function updatePkg (pkgDigest: IPkgDigest, latestVersions: IPkgVersions, isValidate?: boolean) {
+function updatePkg(
+  pkgDigest: IPkgDigest,
+  latestVersions: IPkgVersions,
+  isValidate?: boolean
+) {
   const pkgPath = join(pkgDigest.location, 'package.json')
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pkg = require(pkgPath)
@@ -67,21 +73,63 @@ function updatePkg (pkgDigest: IPkgDigest, latestVersions: IPkgVersions, isValid
  * @param filter function to filter packages need to sync versions
  * @param isValidate whether just validate package need to update
  */
-export async function syncLocalPkgVersions (verSource: EVerSource, filter?: IPkgFilter, isValidate?: boolean) {
+export async function syncLocalPkgVersions(
+  verSource: EVerSource,
+  filter?: IPkgFilter,
+  isValidate?: boolean
+) {
   let allPkgs = await getAllPkgDigest()
   if (filter) allPkgs = allPkgs.filter(filter)
   const latestVersions = await getLatestVersions(verSource, allPkgs)
-  const pkgsUpdated = allPkgs.filter(item => updatePkg(item, latestVersions, isValidate))
+  const pkgsUpdated = allPkgs.filter(item =>
+    updatePkg(item, latestVersions, isValidate)
+  )
   return pkgsUpdated
 }
 
+function getAllMatchedPackgeNames(
+  pkgDigest: IPkgDigest,
+  generalPkgNames: string[]
+) {
+  const pkgPath = join(pkgDigest.location, 'package.json')
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const pkg = require(pkgPath)
+  let pkgNames: string[] = Object.keys(pkg.devDependencies) || []
+  if (pkg.dependencies)
+    pkgNames = pkgNames.concat(Object.keys(pkg.dependencies))
+  if (pkg.peerDependencies)
+    pkgNames = pkgNames.concat(Object.keys(pkg.peerDependencies))
+
+  return uniqArray(pkgNames).filter(pkgName => {
+    return generalPkgNames.some(item => {
+      return item === pkgName.slice(0, item.length - 1) + '*'
+    })
+  })
+}
+
 /**
- * 
- * @param pkgNames pkg names from remote npm regisetry but used in local packages
+ * sync pkg names from remote npm regisetry but used in local packages
+ * @param pkgNames
  */
-export async function syncRemotePkgVersions (pkgNames: string[]) {
+export async function syncRemotePkgVersions(pkgNames: string[]) {
   let allPkgs = await getAllPkgDigest()
-  const latestVersions = await getLatestVersFromNpm(pkgNames)
+  const groupedPkgNames = groupPkgNames(pkgNames)
+
+  let specificPkgNames = groupedPkgNames.specific
+  if (groupedPkgNames.general.length) {
+    specificPkgNames = allPkgs
+      .map(pkgDigest =>
+        getAllMatchedPackgeNames(pkgDigest, groupedPkgNames.general)
+      )
+      .reduce((acc, cur) => {
+        acc = acc.concat(cur)
+        return acc
+      }, specificPkgNames)
+  }
+
+  const uniqSpecificPkgNames = uniqArray(specificPkgNames)
+
+  const latestVersions = await getLatestVersFromNpm(uniqSpecificPkgNames)
   const pkgsUpdated = allPkgs.filter(item => updatePkg(item, latestVersions))
   return pkgsUpdated
 }

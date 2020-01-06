@@ -2,7 +2,11 @@ import { runShellCmd, findFileRecursive } from 'deploy-toolkit'
 import semver from 'semver'
 import path from 'path'
 
-export type IPkgFilter = (pkg: IPkgDigest, index: number, arr: IPkgDigest[]) => boolean
+export type IPkgFilter = (
+  pkg: IPkgDigest,
+  index: number,
+  arr: IPkgDigest[]
+) => boolean
 /**
  * package version data source
  */
@@ -30,56 +34,90 @@ export interface IPkgVersions {
   [k: string]: string
 }
 
+const isWin = /^win/.test(process.platform)
+
+/**
+ * detect whether lerna has been installed
+ */
+async function detectLerna() {
+  try {
+    await runShellCmd(isWin ? 'npx.cmd' : 'npx', [
+      '--no-install',
+      'lerna',
+      '-v'
+    ])
+    return true
+  } catch {
+    console.warn(
+      `[lerna-ci]lerna not installed.\n  If you are using lerna in this project, please excute \`yarn\` or \`npm\` then run\n   \`${process.argv.join(
+        ' '
+      )}\` again`
+    )
+    return false
+  }
+}
+
+/**
+ * get project itself package digest
+ */
+function getSelfPkgDigest() {
+  const defPkgPath = findFileRecursive('package.json', process.cwd())
+  if (!defPkgPath) return []
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const pkg = require(defPkgPath)
+  return [
+    {
+      name: pkg.name,
+      version: pkg.version,
+      private: pkg.private || false,
+      location: path.dirname(defPkgPath)
+    }
+  ] as IPkgDigest[]
+}
+
 /**
  * get all package's info in a lerna project
  * @param needPrivate whether get private package
  * @param searchKwd filter package name which contain searchKwd
  */
-export async function getAllPkgDigest (needPrivate = true, searchKwd = '') {
-  const isWin = /^win/.test(process.platform)
-  /**
-   * don't install from npm remote if lerna not installed
-   */
-  const args = ['--no-install', 'lerna', 'list', '--json']
-  if (needPrivate) args.push('--all')
-  if (searchKwd) args.push(searchKwd)
-  try {
-    const pkgsString = await runShellCmd(isWin ? 'npx.cmd' : 'npx', args)
-    return JSON.parse(
-      pkgsString
-        .split('\n')
-        .filter(l => /^[\s\[\]]/.test(l))
-        .join('\n')
-    ) as IPkgDigest[]
-  } catch (error) {
-    console.warn('[lerna-ci]exec lerna failed', error)
-    const defPkgPath = findFileRecursive('package.json', process.cwd())
-    if (!defPkgPath) return []
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pkg = require(defPkgPath)
-    return [
-      {
-        name: pkg.name,
-        version: pkg.version,
-        private: pkg.private || false,
-        location: path.dirname(defPkgPath)
-      }
-    ] as IPkgDigest[]
+export async function getAllPkgDigest(needPrivate = true, searchKwd = '') {
+  const isLernaInstalled = await detectLerna()
+  let result: IPkgDigest[] = []
+  if (isLernaInstalled) {
+    /**
+     * don't install from npm remote if lerna not installed
+     */
+    const args = ['--no-install', 'lerna', 'list', '--json']
+    if (needPrivate) args.push('--all')
+    if (searchKwd) args.push(searchKwd)
+    try {
+      const pkgsString = await runShellCmd(isWin ? 'npx.cmd' : 'npx', args)
+      result = JSON.parse(
+        pkgsString
+          .split('\n')
+          .filter(l => /^[\s\[\]]/.test(l))
+          .join('\n')
+      ) as IPkgDigest[]
+    } catch (error) {
+      console.warn('[lerna-ci]exec lerna failed', error)
+    }
   }
+  const selfPkgDigest = await getSelfPkgDigest()
+  return result.concat(selfPkgDigest)
 }
 
 /**
  * remove version in tag
  * @param tag tag name: @elements/list@1.2.3
  */
-function removeTagVersion (tag: string) {
+function removeTagVersion(tag: string) {
   return tag.replace(/@\d.*$/, '')
 }
 
 /**
  * get newest tag from remote git server
  */
-export async function getLatestPkgVersFromGit () {
+export async function getLatestPkgVersFromGit() {
   // sync all tags from remote, and prune noexists tags in locale
   await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'])
   // get tags sort by tag version desc
@@ -115,9 +153,14 @@ export async function getLatestPkgVersFromGit () {
  * get single package verison info from npm( via yarn cli )
  * @param name package name
  */
-async function getVersionFromNpm (name: string): Promise<string | undefined> {
+async function getVersionFromNpm(name: string): Promise<string | undefined> {
   try {
-    const verStr = await runShellCmd('yarn', ['info', name, 'version', '--json'])
+    const verStr = await runShellCmd('yarn', [
+      'info',
+      name,
+      'version',
+      '--json'
+    ])
     if (!verStr) return
     const ver = JSON.parse(verStr)
     if (ver.type !== 'inspect') return
@@ -132,7 +175,7 @@ async function getVersionFromNpm (name: string): Promise<string | undefined> {
  * get versions from npm server
  * @param pkgs pkgs need to version info
  */
-export async function getLatestVersFromNpm (pkgNames: string[]) {
+export async function getLatestVersFromNpm(pkgNames: string[]) {
   const result: IPkgVersions = {}
   while (pkgNames.length) {
     const items = pkgNames.splice(-10)
@@ -145,7 +188,7 @@ export async function getLatestVersFromNpm (pkgNames: string[]) {
   return result
 }
 
-function maxVersion (...vers: (string | undefined)[]) {
+function maxVersion(...vers: (string | undefined)[]) {
   const def = '0.0.0'
   return vers.reduce((res, cur) => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -158,7 +201,10 @@ function maxVersion (...vers: (string | undefined)[]) {
  * @param verSource version source: from git, npm or both
  * @param pkgs packages need version info
  */
-export async function getLatestVersions (verSource: EVerSource, pkgs: IPkgDigest[]) {
+export async function getLatestVersions(
+  verSource: EVerSource,
+  pkgs: IPkgDigest[]
+) {
   if (!pkgs.length) return {}
   // local package versions
   const localVers: IPkgVersions = {}
@@ -169,7 +215,8 @@ export async function getLatestVersions (verSource: EVerSource, pkgs: IPkgDigest
 
   // versions info from npm
   let npmVers: IPkgVersions = {}
-  if (verSource !== EVerSource.GIT) npmVers = await getLatestVersFromNpm(pkgs.map(item => item.name))
+  if (verSource !== EVerSource.GIT)
+    npmVers = await getLatestVersFromNpm(pkgs.map(item => item.name))
 
   // versions info from git
   let gitVers: IPkgVersions = {}
@@ -188,4 +235,39 @@ export async function getLatestVersions (verSource: EVerSource, pkgs: IPkgDigest
     return acc
   }, result)
   return result
+}
+
+interface IGroupedPkgNames {
+  specific: string[]
+  general: string[]
+}
+
+/**
+ * remove duplicated item in array
+ * @param items array
+ */
+export function uniqArray<T>(items: T[]): T[] {
+  return items.filter((item, i) => items.indexOf(item) === i)
+}
+
+/**
+ * group general(with pattern) and specific package names
+ * @param pkgNames package names, example ['@elements/*', 'uuid']
+ */
+export function groupPkgNames(pkgNames: string[]): IGroupedPkgNames {
+  const result: IGroupedPkgNames = { specific: [], general: [] }
+  pkgNames.reduce((acc, cur) => {
+    if (/^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/.test(cur)) {
+      acc.specific.push(cur)
+    } else if (/^@[a-z0-9-~][a-z0-9-._~]*\/\*$/.test(cur)) {
+      acc.general.push(cur)
+    } else {
+      console.warn(`[lerna-ci] package name \`${cur}\` is invalid and ignored`)
+    }
+    return acc
+  }, result)
+  return {
+    specific: uniqArray(result.specific),
+    general: uniqArray(result.general)
+  }
 }

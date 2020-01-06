@@ -1,6 +1,6 @@
 {
   "name": "lerna-ci",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "lerna  toolkit  for ci integration with gitlab",
   "main": "dist/index.js",
   "module": "dist/index.es.js",
