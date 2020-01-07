@@ -94,11 +94,11 @@ function getAllMatchedPackgeNames(
   const pkgPath = join(pkgDigest.location, 'package.json')
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pkg = require(pkgPath)
-  let pkgNames: string[] = Object.keys(pkg.devDependencies) || []
+  let pkgNames: string[] = Object.keys(pkg.devDependencies || {}) || []
   if (pkg.dependencies)
-    pkgNames = pkgNames.concat(Object.keys(pkg.dependencies))
+    pkgNames = pkgNames.concat(Object.keys(pkg.dependencies || {}))
   if (pkg.peerDependencies)
-    pkgNames = pkgNames.concat(Object.keys(pkg.peerDependencies))
+    pkgNames = pkgNames.concat(Object.keys(pkg.peerDependencies || {}))
 
   return uniqArray(pkgNames).filter(pkgName => {
     return generalPkgNames.some(item => {
