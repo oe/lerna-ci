@@ -44,6 +44,7 @@ async function main () {
   const pkgConfig = await getPkgConfig()
 
   if (needRunAll || args.indexOf('fixpack') !== -1) {
+    console.log('[lerna-ci] try to fix local package.json\'s order')
     const updatedPkgs = await fixPackageJson(pkgConfig.fixpack)
     if (updatedPkgs.length) {
       console.log('[lerna-ci] the following package.json files are formatted:\n  ' + 
@@ -51,6 +52,7 @@ async function main () {
     } else {
       console.log('[lerna-ci] all package.json files are well formatted, nothing touched')
     }
+    console.log('')
   }
 
   if (needRunAll || args.indexOf('syncremote') !== -1) {
@@ -66,6 +68,7 @@ async function main () {
     } else {
       console.warn('[lerna-ci] no remote packages specified, nothing touched')
     }
+    console.log('')
   }
 
 
@@ -78,6 +81,7 @@ async function main () {
     } else {
       console.log('[lerna-ci] all package.json files\' local dependences are up to update, nothing touched')
     }
+    console.log('')
   }
 }
 
