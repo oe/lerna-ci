@@ -24,11 +24,14 @@ function checkMissing (pack, config) {
     required = config.required
   }
   required.forEach(function (key) {
-    if (!pack[key]) throw new Error(config.fileName + ' files must have a ' + key)
+    if (!pack[key]) throw new Error('[lerna-ci] ' + config.filepath + ' must have a ' + key)
   })
-  warnItems.forEach(function (key) {
-    if (!pack[key] && !config.quiet) console.log('missing ' + key)
-  })
+
+  const missedKeys = warnItems.filter((key) => !pack[key])
+  if (!config.quiet && missedKeys.length) {
+    console.warn(`[lerna-ci] ${config.filepath.replace(process.cwd(), '.')} missing following keys:\n  ${missedKeys.join('\n  ')}`)
+  }
+  return missedKeys
 }
 
 function sortAlphabetically (object) {
@@ -44,14 +47,15 @@ function sortAlphabetically (object) {
   }
 }
 
-export default function (file, config) {
-  config = extend(defaultConfig, config || {})
-  if (!fs.existsSync(file)) {
-    if (!config.quiet) console.log('No such file: ' + file)
+export default function (filepath, config) {
+  config = extend({}, defaultConfig, config || {})
+  if (!fs.existsSync(filepath)) {
+    if (!config.quiet) console.log('No such file: ' + filepath)
     process.exit(1)
   }
-  config.fileName = path.basename(file)
-  var original = fs.readFileSync(file, { encoding: 'utf8' })
+  config.fileName = path.basename(filepath)
+  config.filepath = filepath
+  var original = fs.readFileSync(filepath, { encoding: 'utf8' })
   var pack = ALCE.parse(original)
   var out = {}
   var outputString = ''
@@ -101,9 +105,9 @@ export default function (file, config) {
   outputString = JSON.stringify(out, null, 2) + (config.newline ? '\n' : '')
 
   if (outputString !== original) {
-    fs.writeFileSync(file, outputString, { encoding: 'utf8' })
-    if (!config.quiet) console.log(config.fileName + ' fixed' + '!')
+    fs.writeFileSync(filepath, outputString, { encoding: 'utf8' })
+    return true
   } else {
-    if (!config.quiet) console.log(config.fileName + ' already clean' + '!')
+    return false
   }
 }

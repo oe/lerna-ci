@@ -13,6 +13,8 @@ import { findFileRecursive } from 'deploy-toolkit'
 
 
 interface IConfig {
+  /** lerna-ci version */
+  // version?: string
   /** remote git url */
   gitRemoteUrl?: string
   /** project root dir, default dir contains .git folder */
@@ -56,6 +58,7 @@ export function setup (cfg: IConfig = {}) {
     devCommitMessage: '[lerna-ci] sync package versions'
   }
   Object.assign(config, defaults, cfg)
+  // config.version = require(join(__dirname, '../package.json')).version
   // append `[skip ci]` if it's missing
   // @ts-ignore
   if (!/\[skip ci\]/.test(config.releaseCommitMessage)) {

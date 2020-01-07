@@ -1,5 +1,6 @@
 import cosmiconfig from 'cosmiconfig'
-import { syncRemotePkgVersions, fixPackageJson, syncLocalPkgVersions, EVerSource } from '../index'
+import { join } from 'path'
+import { syncRemotePkgVersions, fixPackageJson, syncLocalPkgVersions, detectLerna, EVerSource } from '../index'
 
 interface IConfig {
   // fixpack options: https://github.com/henrikjoreteg/fixpack#configuration
@@ -10,7 +11,7 @@ interface IConfig {
   synclocal?: EVerSource
 }
 
-async function getConfig () {
+async function getPkgConfig () {
   const explorer = cosmiconfig('lerna-ci')
   try {
     const result = await explorer.search()
@@ -21,25 +22,62 @@ async function getConfig () {
 }
 
 async function main () {
-  const config = await getConfig()
+  // get arguments from command line
   let args = process.argv.slice(2)
   args = args.filter((item, idx) => args.indexOf(item) === idx)
-  const needRunAll = args.indexOf('all') !== -1
-  if (needRunAll || args.indexOf('fixpack') !== -1) {
-    console.log('[lerna-ci] try to fix local package.json\'s order')
-    await fixPackageJson(config.fixpack)
+
+  if (args[0] === '-v' || args[0] === '--version') {
+    console.warn(require(join(__dirname, '../../package.json')).version)
+    return
   }
+
+  const isLernaInstalled = await detectLerna()
+  if (!isLernaInstalled) {
+    console.warn(
+      '[lerna-ci] lerna not installed.\n  If you are using lerna in this project, \n  please excute `yarn` or `npm` to install lerna'
+    )
+  }
+
+  const needRunAll = args.indexOf('all') !== -1
+  const cwd = process.cwd()
+  // get config from package.json
+  const pkgConfig = await getPkgConfig()
+
+  if (needRunAll || args.indexOf('fixpack') !== -1) {
+    const updatedPkgs = await fixPackageJson(pkgConfig.fixpack)
+    if (updatedPkgs.length) {
+      console.log('[lerna-ci] the following package.json files are formatted:\n  ' + 
+        updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
+    } else {
+      console.log('[lerna-ci] all package.json files are well formatted, nothing touched')
+    }
+  }
+
   if (needRunAll || args.indexOf('syncremote') !== -1) {
     console.log('[lerna-ci] try to sync common remote dependences version')
-    if (config.syncremote && config.syncremote.length) {
-      await syncRemotePkgVersions(config.syncremote)
+    if (pkgConfig.syncremote && pkgConfig.syncremote.length) {
+      const updatedPkgs = await syncRemotePkgVersions(pkgConfig.syncremote)
+      if (updatedPkgs.length) {
+        console.log('[lerna-ci] the following package.json files\' remote dependences are updated:\n  ' + 
+          updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
+      } else {
+        console.log('[lerna-ci] all package.json files\' remote dependences are up to update, nothing touched')
+      }
     } else {
       console.warn('[lerna-ci] no remote packages specified, nothing touched')
     }
   }
+
+
   if (needRunAll || args.indexOf('synclocal') !== -1) {
     console.log('[lerna-ci] try to sync local package dependences\' versions')
-    await syncLocalPkgVersions(config.synclocal || EVerSource.ALL)
+    const updatedPkgs = await syncLocalPkgVersions(pkgConfig.synclocal || EVerSource.ALL)
+    if (updatedPkgs.length) {
+      console.log('[lerna-ci] the following package.json files\' local dependences are updated:\n  ' + 
+        updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
+    } else {
+      console.log('[lerna-ci] all package.json files\' local dependences are up to update, nothing touched')
+    }
   }
 }
 

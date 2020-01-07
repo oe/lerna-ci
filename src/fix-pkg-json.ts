@@ -26,5 +26,5 @@ export async function fixPackageJson (filter?: IPkgFilter | object, config?: obj
       config = filter
     }
   }
-  pkgs.forEach((pkg) => fixpack(path.join(pkg.location, 'package.json'), config))
+  return pkgs.filter((pkg) => fixpack(path.join(pkg.location, 'package.json'), config))
 }

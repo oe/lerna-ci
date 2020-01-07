@@ -36,23 +36,22 @@ export interface IPkgVersions {
 
 const isWin = /^win/.test(process.platform)
 
+let isLernaInstalled: null|boolean = null
 /**
  * detect whether lerna has been installed
  */
-async function detectLerna() {
+export async function detectLerna() {
+  if (typeof isLernaInstalled === 'boolean') return isLernaInstalled
   try {
     await runShellCmd(isWin ? 'npx.cmd' : 'npx', [
       '--no-install',
       'lerna',
       '-v'
     ])
+    isLernaInstalled = true
     return true
   } catch {
-    console.warn(
-      `[lerna-ci]lerna not installed.\n  If you are using lerna in this project, please excute \`yarn\` or \`npm\` then run\n   \`${process.argv.join(
-        ' '
-      )}\` again`
-    )
+    isLernaInstalled = false
     return false
   }
 }

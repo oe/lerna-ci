@@ -47,7 +47,7 @@ function updatePkg(
   if (latestVersions[pkg.name]) {
     if (latestVersions[pkg.name] !== pkg.version) {
       console.log(
-        `[sync pkg versions] update ${pkg.name}'s version from ${
+        `[lerna-ci][sync pkg versions] update ${pkg.name}'s version from ${
           pkg.version
         } => ${latestVersions[pkg.name]}`
       )
@@ -112,12 +112,12 @@ function getAllMatchedPackgeNames(
  * @param pkgNames
  */
 export async function syncRemotePkgVersions(pkgNames: string[]) {
-  let allPkgs = await getAllPkgDigest()
+  let allPkgDigests = await getAllPkgDigest()
   const groupedPkgNames = groupPkgNames(pkgNames)
 
   let specificPkgNames = groupedPkgNames.specific
   if (groupedPkgNames.general.length) {
-    specificPkgNames = allPkgs
+    specificPkgNames = allPkgDigests
       .map(pkgDigest =>
         getAllMatchedPackgeNames(pkgDigest, groupedPkgNames.general)
       )
@@ -130,6 +130,6 @@ export async function syncRemotePkgVersions(pkgNames: string[]) {
   const uniqSpecificPkgNames = uniqArray(specificPkgNames)
 
   const latestVersions = await getLatestVersFromNpm(uniqSpecificPkgNames)
-  const pkgsUpdated = allPkgs.filter(item => updatePkg(item, latestVersions))
+  const pkgsUpdated = allPkgDigests.filter(item => updatePkg(item, latestVersions))
   return pkgsUpdated
 }
