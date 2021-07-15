@@ -59,19 +59,17 @@ export async function detectLerna() {
 /**
  * get project itself package digest
  */
-function getSelfPkgDigest() {
+function getSelfPkgDigest(): IPkgDigest | undefined {
   const defPkgPath = findFileRecursive('package.json', process.cwd())
-  if (!defPkgPath) return []
+  if (!defPkgPath) return
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pkg = require(defPkgPath)
-  return [
-    {
-      name: pkg.name,
-      version: pkg.version,
-      private: pkg.private || false,
-      location: path.dirname(defPkgPath)
-    }
-  ] as IPkgDigest[]
+  return {
+    name: pkg.name,
+    version: pkg.version,
+    private: pkg.private || false,
+    location: path.dirname(defPkgPath)
+  }
 }
 
 /**
@@ -101,8 +99,14 @@ export async function getAllPkgDigest(needPrivate = true, searchKwd = '') {
       console.warn('[lerna-ci]exec lerna failed', error)
     }
   }
-  const selfPkgDigest = await getSelfPkgDigest()
-  return result.concat(selfPkgDigest)
+  // root package is private by default
+  if (needPrivate) {
+    const selfPkgDigest = await getSelfPkgDigest()
+    if (selfPkgDigest && searchKwd && selfPkgDigest.name.indexOf(searchKwd) !== -1) {
+      result.push(selfPkgDigest)
+    }
+  }
+  return result
 }
 
 /**
