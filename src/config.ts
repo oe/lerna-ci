@@ -60,8 +60,7 @@ export function setup (cfg: IConfig = {}) {
   Object.assign(config, defaults, cfg)
   // config.version = require(join(__dirname, '../package.json')).version
   // append `[skip ci]` if it's missing
-  // @ts-ignore
-  if (!/\[skip ci\]/.test(config.releaseCommitMessage)) {
+  if (!config.releaseCommitMessage || !/\[skip ci\]/.test(config.releaseCommitMessage)) {
     config.releaseCommitMessage += '[skip ci]'
   }
 }

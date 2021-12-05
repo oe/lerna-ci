@@ -27,6 +27,7 @@ async function main () {
   args = args.filter((item, idx) => args.indexOf(item) === idx)
 
   if (args[0] === '-v' || args[0] === '--version') {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     console.warn(require(join(__dirname, '../../package.json')).version)
     return
   }
