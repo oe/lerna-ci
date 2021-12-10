@@ -1,5 +1,5 @@
 import {
-  getAllPkgDigest,
+  getAllPackageDigests,
   getLatestVersions,
   getLatestVersFromNpm,
   groupPkgNames,
@@ -78,7 +78,7 @@ export async function syncLocalPkgVersions(
   filter?: IPkgFilter,
   isValidate?: boolean
 ) {
-  let allPkgs = await getAllPkgDigest()
+  let allPkgs = await getAllPackageDigests()
   if (filter) allPkgs = allPkgs.filter(filter)
   const latestVersions = await getLatestVersions(verSource, allPkgs)
   const pkgsUpdated = allPkgs.filter(item =>
@@ -112,7 +112,7 @@ function getAllMatchedPackgeNames(
  * @param pkgNames
  */
 export async function syncRemotePkgVersions(pkgNames: string[]) {
-  const allPkgDigests = await getAllPkgDigest()
+  const allPkgDigests = await getAllPackageDigests()
   const groupedPkgNames = groupPkgNames(pkgNames)
 
   let specificPkgNames = groupedPkgNames.specific

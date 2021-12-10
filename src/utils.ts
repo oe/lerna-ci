@@ -1,6 +1,7 @@
 import { runShellCmd, findFileRecursive } from 'deploy-toolkit'
 import semver from 'semver'
 import path from 'path'
+import fs from 'fs'
 
 export type IPkgFilter = (
   pkg: IPkgDigest,
@@ -59,7 +60,7 @@ export async function detectLerna() {
 /**
  * get project itself package digest
  */
-function getSelfPkgDigest(): IPkgDigest | undefined {
+function getRepoPackageDigest(): IPkgDigest | undefined {
   const defPkgPath = findFileRecursive('package.json', process.cwd())
   if (!defPkgPath) return
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -73,11 +74,15 @@ function getSelfPkgDigest(): IPkgDigest | undefined {
 }
 
 /**
+ * @deprecated use getAllPackageDigests instead
+ */
+export const getAllPkgDigest = getAllPackageDigests
+/**
  * get all package's info in a lerna project
  * @param needPrivate whether get private package
  * @param searchKwd filter package name which contain searchKwd
  */
-export async function getAllPkgDigest(needPrivate = true, searchKwd = '') {
+export async function getAllPackageDigests(needPrivate = true, searchKwd = '') {
   const isLernaInstalled = await detectLerna()
   let result: IPkgDigest[] = []
   if (isLernaInstalled) {
@@ -101,7 +106,7 @@ export async function getAllPkgDigest(needPrivate = true, searchKwd = '') {
   }
   // root package is private by default
   if (needPrivate) {
-    const selfPkgDigest = await getSelfPkgDigest()
+    const selfPkgDigest = await getRepoPackageDigest()
     if (selfPkgDigest && searchKwd && selfPkgDigest.name.indexOf(searchKwd) !== -1) {
       result.push(selfPkgDigest)
     }
@@ -191,6 +196,7 @@ export async function getLatestVersFromNpm(pkgNames: string[]) {
   return result
 }
 
+/** get maxVersion of from the given version list  */
 function maxVersion(...vers: (string | undefined)[]) {
   const def = '0.0.0'
   return vers.reduce((res, cur) => {

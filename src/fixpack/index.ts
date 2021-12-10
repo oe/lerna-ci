@@ -1,6 +1,6 @@
 import fixpack from './fixpack'
 import path from 'path'
-import { getAllPkgDigest, IPkgFilter } from '../utils'
+import { getAllPackageDigests, IPkgFilter } from '../utils'
 
 
 /**
@@ -15,7 +15,7 @@ export async function fixPackageJson (config?: object)
  */
 export async function fixPackageJson (filter: IPkgFilter, config: object)
 export async function fixPackageJson (filter?: IPkgFilter | object, config?: object) {
-  let pkgs = await getAllPkgDigest()
+  let pkgs = await getAllPackageDigests()
   if (!filter) {
     config = {}
   } else {
