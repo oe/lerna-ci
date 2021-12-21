@@ -16,8 +16,11 @@ export const enum EVerSource {
   /** from npm */
   NPM = 'npm',
   /** from git */
-  GIT = 'git'
+  GIT = 'git',
+  /** from local */
+  LOCAL = 'local'
 }
+
 export interface IPkgDigest {
   /** package name */
   name: string
@@ -216,6 +219,7 @@ export async function getLatestVersions(
     return acc
   }, localVers)
 
+  if (verSource === EVerSource.LOCAL) return localVers
   // versions info from npm
   let npmVers: IPkgVersions = {}
   if (verSource !== EVerSource.GIT)

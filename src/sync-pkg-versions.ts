@@ -112,7 +112,7 @@ function getAllMatchedPackgeNames(
  * @param pkgNames
  */
 export async function syncRemotePkgVersions(pkgNames: string[]) {
-  let allPkgDigests = await getAllPkgDigest()
+  const allPkgDigests = await getAllPkgDigest()
   const groupedPkgNames = groupPkgNames(pkgNames)
 
   let specificPkgNames = groupedPkgNames.specific
