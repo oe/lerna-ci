@@ -1,21 +1,19 @@
-import cosmiconfig from 'cosmiconfig'
+import { cosmiconfig } from 'cosmiconfig'
 import { join } from 'path'
-import { syncRemotePkgVersions, fixPackageJson, syncLocalPkgVersions, detectLerna, EVerSource } from '../index'
+import { syncPackageVersions, detectLerna, EVerSource, syncPackageDependenceVersion } from '../index'
 
 interface IConfig {
-  // fixpack options: https://github.com/henrikjoreteg/fixpack#configuration
-  fixpack?: object
   // package name need to sync
   syncremote?: string[]
-  // local package version source: all, git, npm
+  // local package version source: all, git, npm, local
   synclocal?: EVerSource
 }
 
-async function getPkgConfig () {
+async function getConfig () {
   const explorer = cosmiconfig('lerna-ci')
   try {
     const result = await explorer.search()
-    return (result.config || {}) as IConfig
+    return (result?.config || {}) as IConfig
   } catch (error) {
     return {}
   }
@@ -28,7 +26,7 @@ async function main () {
 
   if (args[0] === '-v' || args[0] === '--version') {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    console.warn(require(join(__dirname, '../../package.json')).version)
+    console.log('lerna-ci version: ', require(join(__dirname, '../../package.json')).version)
     return
   }
 
@@ -38,49 +36,36 @@ async function main () {
       '[lerna-ci] lerna not installed.\n  If you are using lerna in this project, \n  please excute `yarn` or `npm` to install lerna'
     )
   }
+  const cwd = process.cwd()
 
   const needRunAll = args.indexOf('all') !== -1
-  const cwd = process.cwd()
-  // get config from package.json
-  const pkgConfig = await getPkgConfig()
 
-  if (needRunAll || args.indexOf('fixpack') !== -1) {
-    console.log('[lerna-ci] try to fix local package.json\'s order')
-    const updatedPkgs = await fixPackageJson(pkgConfig.fixpack)
-    if (updatedPkgs.length) {
-      console.log('[lerna-ci] the following package.json files are formatted:\n  ' + 
-        updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
-    } else {
-      console.log('[lerna-ci] all package.json files are well formatted, nothing touched')
-    }
-    console.log('')
-  }
-
-  if (needRunAll || args.indexOf('syncremote') !== -1) {
-    console.log('[lerna-ci] try to sync common remote dependences version')
-    if (pkgConfig.syncremote && pkgConfig.syncremote.length) {
-      const updatedPkgs = await syncRemotePkgVersions(pkgConfig.syncremote)
-      if (updatedPkgs.length) {
-        console.log('[lerna-ci] the following package.json files\' remote dependences are updated:\n  ' + 
-          updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
-      } else {
-        console.log('[lerna-ci] all package.json files\' remote dependences are up to update, nothing touched')
-      }
-    } else {
-      console.warn('[lerna-ci] no remote packages specified, nothing touched')
-    }
-    console.log('')
-  }
-
+  const repoConfig = await getConfig()
 
   if (needRunAll || args.indexOf('synclocal') !== -1) {
-    console.log('[lerna-ci] try to sync local package dependences\' versions')
-    const updatedPkgs = await syncLocalPkgVersions(pkgConfig.synclocal || EVerSource.ALL)
+    console.log('[lerna-ci] try to sync local package versions')
+    const updatedPkgs = await syncPackageVersions({ versionSource: repoConfig.synclocal || EVerSource.ALL})
     if (updatedPkgs.length) {
-      console.log('[lerna-ci] the following package.json files\' local dependences are updated:\n  ' + 
+      console.log('[lerna-ci] the following package.json are updated:\n  ' + 
         updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
     } else {
-      console.log('[lerna-ci] all package.json files\' local dependences are up to update, nothing touched')
+      console.log('[lerna-ci] all package.json files\' are up to update, nothing touched')
+    }
+    console.log('')
+  }
+
+  if ((needRunAll || args.indexOf('syncremote') !== -1) && repoConfig.syncremote) {
+    console.log('[lerna-ci] try to sync packages\' dependencies\' versions')
+    const options = Array.isArray(repoConfig.syncremote)
+      ? { packageNames: repoConfig.syncremote }
+      : { versionMap: repoConfig.syncremote}
+    
+    const updatedPkgs = await syncPackageDependenceVersion(options)
+    if (updatedPkgs.length) {
+      console.log('[lerna-ci] the following package.json files\' dependencies are updated:\n  ' + 
+        updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
+    } else {
+      console.log('[lerna-ci] all package.json files\' dependencies are up to update, nothing touched')
     }
     console.log('')
   }
