@@ -4,7 +4,7 @@
   "description": "lerna  toolkit  for ci integration with gitlab",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
-  "bin": "./dist/bin/index",
+  "bin": "./dist/bin/index.js",
   "repository": "https://github.com/oe/lerna-ci.git",
   "author": "Saiya",
   "license": "MIT",
