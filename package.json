@@ -13,9 +13,9 @@
     "clean": "rimraf ./dist",
     "prebuild": "yarn run lint && yarn run clean",
     "build": "tsc",
-    "prepublish": "yarn build",
     "lint-message": "echo 'lint code before commit'",
-    "lint": "eslint './src/**/*.{ts,tsx}'"
+    "lint": "eslint './src/**/*.{ts,tsx}'",
+    "release": "yarn build && yarn publish"
   },
   "keywords": [
     "monorepo",
