@@ -1,5 +1,5 @@
 import { getAllPackageDigests } from '../pkg-info'
-import { updatePkg, getVersionsFromNpm, IVersionMap, IVersionStrategy, fixPackageVersions } from './common'
+import { updatePkg, getVersionsFromNpm, IVersionMap, IVersionStrategy, fixPackageVersions, INpmVersionStrategy } from './common'
 
 export interface ISyncDepOptions {
   /** 
@@ -13,6 +13,11 @@ export interface ISyncDepOptions {
    *  if packageNames also provided, will fetch missing versions
    */
   versionMap?: IVersionMap
+  /**
+   * npm version strategy
+   *  default to 'latest'
+   */
+  npmVersionStrategy?: INpmVersionStrategy
   /**
    * version range strategy, use ^ by default
    */
@@ -38,7 +43,7 @@ export async function syncPackageDependenceVersion(syncOptions: ISyncDepOptions,
     const pkgsHasVersion = Object.keys(versionMap)
     const pkgsWithoutVersion = options.packageNames.filter(n => pkgsHasVersion.indexOf(n) === -1)
     if (pkgsWithoutVersion.length) {
-      const versionFromNpm = await getVersionsFromNpm(pkgsWithoutVersion)
+      const versionFromNpm = await getVersionsFromNpm(pkgsWithoutVersion, options.npmVersionStrategy)
       Object.assign(versionMap, versionFromNpm)
     }
   }

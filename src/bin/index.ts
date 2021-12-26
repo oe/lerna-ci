@@ -44,7 +44,8 @@ async function main () {
 
   if (needRunAll || args.indexOf('synclocal') !== -1) {
     console.log('[lerna-ci] try to sync local package versions')
-    const updatedPkgs = await syncPackageVersions({ versionSource: repoConfig.synclocal || EVerSource.ALL})
+    const options = typeof repoConfig.synclocal === 'string' ? { versionSource: repoConfig.synclocal } : (repoConfig.synclocal || {})
+    const updatedPkgs = await syncPackageVersions(options)
     if (updatedPkgs.length) {
       console.log('[lerna-ci] the following package.json are updated:\n  ' + 
         updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))

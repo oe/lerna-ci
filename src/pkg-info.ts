@@ -31,6 +31,9 @@ export function getRepoPackageDigest(): IPackageDigest | null {
 
 let lernaNpmClient: string | null | undefined
 
+/**
+ * get lerna monorepo preferred npm client
+ */
 export async function getRepoNpmClient() {
   if (typeof lernaNpmClient !== 'undefined') return lernaNpmClient
   const digest = await getRepoPackageDigest()

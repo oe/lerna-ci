@@ -2,7 +2,7 @@ import { join } from 'path'
 import { groupPkgNames, uniqArray, maxVersion } from '../utils'
 import { getAllPackageDigests, IPackageFilter} from '../pkg-info'
 import { IPackageDigest, IPackageVersions, EVerSource } from '../types'
-import { updatePkg, getVersionsFromNpm, getLatestPkgVersFromGit, fixPackageVersions } from './common'
+import { updatePkg, getVersionsFromNpm, getLatestPkgVersFromGit, fixPackageVersions, INpmVersionStrategy } from './common'
 
 export interface ISyncPackageOptions {
   /**
@@ -10,6 +10,11 @@ export interface ISyncPackageOptions {
    * how to get latest locale package version source: npm, git or both
    */
   versionSource?: EVerSource
+  /**
+   * npm version strategy
+   *  default to 'latest'
+   */
+  npmVersionStrategy?: INpmVersionStrategy
   /**
    * filter which package should be synced
    */
@@ -29,7 +34,7 @@ export async function syncPackageVersions(options: ISyncPackageOptions = { versi
   let allPkgs = await getAllPackageDigests()
   if (options.packageFilter) allPkgs = allPkgs.filter(options.packageFilter)
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const latestVersions = await getLatestVersions(options.versionSource!, allPkgs)
+  const latestVersions = await getLatestVersions(options.versionSource!, allPkgs, options.npmVersionStrategy)
   const caretVersions =  fixPackageVersions(latestVersions, '^')
   const pkgsUpdated = allPkgs.filter(item => updatePkg(item, caretVersions , options.checkOnly, latestVersions[item.name]))
   return pkgsUpdated
@@ -42,7 +47,8 @@ export async function syncPackageVersions(options: ISyncPackageOptions = { versi
  */
 async function getLatestVersions(
   verSource: EVerSource,
-  pkgs: IPackageDigest[]
+  pkgs: IPackageDigest[],
+  npmVersionStrategy?: INpmVersionStrategy
 ) {
   if (!pkgs.length) return {}
   // local package versions
@@ -57,7 +63,7 @@ async function getLatestVersions(
   let npmVers: IPackageVersions = {}
   if (verSource !== EVerSource.GIT) {
     // can not get version from private package
-    npmVers = await getVersionsFromNpm(pkgs.filter(p => !p.private).map(item => item.name))
+    npmVers = await getVersionsFromNpm(pkgs.filter(p => !p.private).map(item => item.name), npmVersionStrategy)
   }
 
   // versions info from git

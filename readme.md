@@ -79,5 +79,5 @@ you may need to reinstall your dependence via `yarn && yarn lerna bootstrap` or 
 ## cli command
 
 ## changes on version 1.0
-1. fixpack has been removed from lerna-ci, you may use [fixpack](https://github.com/henrikjoreteg/fixpack) instead, it has been much more perfect 
+1. fixpack has been removed from lerna-ci, you may use [fixpack](https://github.com/henrikjoreteg/fixpack) instead, it has been much more complete 
 2. most useful methods are renamed for better understanding, but no more features is removed, you may read docs above to upgrade

@@ -34,13 +34,12 @@ export function fixPackageVersions(versionMap: IVersionMap, versionStrategy?: IV
 
 /**
  * get versions from npm server
- * @param pkgs pkgs need to version info
  */
-export async function getVersionsFromNpm(pkgNames: string[]) {
+export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: INpmVersionStrategy) {
   const result: IPackageVersions = {}
   while (pkgNames.length) {
     const items = pkgNames.splice(-10)
-    const vers = await Promise.all(items.map(getSingleVersionFromNpm))
+    const vers = await Promise.all(items.map(name => getSingleVersionFromNpm(name, versionStrategy)))
     vers.forEach((ver, idx) => {
       if (!ver) return
       result[items[idx]] = ver
@@ -50,22 +49,35 @@ export async function getVersionsFromNpm(pkgNames: string[]) {
 }
 
 /**
+ * npm version strategy
+ *  max: max package version
+ *  latest: latest release package version
+ */
+export type INpmVersionStrategy = 'max' | 'latest'
+
+/**
  * get single package version info from npm( via yarn cli )
  * @param name package name
+ * @param type version strategy, max version or latest version, default latest
  */
-async function getSingleVersionFromNpm(name: string): Promise<string | undefined> {
+export async function getSingleVersionFromNpm(name: string, type: INpmVersionStrategy = 'latest'): Promise<string | undefined> {
   try {
-    const npmClient = (await getRepoNpmClient()) || 'npm'
+    // actually only tested yarn and npm
+    const npmClient = (await getRepoNpmClient()) || 'yarn'
+    console.log('npmClient', npmClient)
     const verStr = await runShellCmd(npmClient, [
       'info',
       name,
-      'version',
+      type === 'latest' ? 'version' : 'versions',
       '--json'
     ])
     if (!verStr) return
     const ver = JSON.parse(verStr)
-    if (typeof ver === 'string') return ver
-    if (ver.type !== 'inspect') return
+    const result  = ver && ver.type ==='inspect' ? ver.data : ver
+    if (type === 'latest') {
+      return typeof result === 'string' ? result : undefined
+    }
+    if (Array.isArray(result)) return result.pop()
     return ver.data
   } catch (error) {
     console.warn(`[lerna-ci] failed to get version of ${name} from npm`, error)
