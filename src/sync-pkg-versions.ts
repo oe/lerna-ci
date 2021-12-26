@@ -14,7 +14,7 @@ import fs from 'fs'
 
 /**
  * update deps versions, return true if any pkg's version updated
- * @param deps orignial deps object
+ * @param deps original deps object
  * @param versions latest package versions
  */
 function updateDepsVersion(deps: IPkgVersions, versions: IPkgVersions) {
@@ -32,7 +32,7 @@ function updateDepsVersion(deps: IPkgVersions, versions: IPkgVersions) {
 /**
  * update a single pkg's package.json, return true if any things updated
  * @param pkgDigest a single pkg's digest info
- * @param latestVersions lastest version of all locale packages
+ * @param latestVersions latest version of all locale packages
  * @param isValidate if true just validate whether package need to update, and won't update its package.json file
  */
 function updatePkg(
@@ -57,8 +57,8 @@ function updatePkg(
   }
   const devChanged = updateDepsVersion(pkg.devDependencies, latestVersions)
   const peerChanged = updateDepsVersion(pkg.peerDependencies, latestVersions)
-  const depChnaged = updateDepsVersion(pkg.dependencies, latestVersions)
-  if (hasChanged || devChanged || depChnaged || peerChanged) {
+  const depChanged = updateDepsVersion(pkg.dependencies, latestVersions)
+  if (hasChanged || devChanged || depChanged || peerChanged) {
     // write file only not in validation mode
     if (!isValidate) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
     return true
@@ -68,7 +68,7 @@ function updatePkg(
 
 /**
  * sync all local packages' version
- *  return all packages' digest info that need to update (has been upated if isValidate is false)
+ *  return all packages' digest info that need to update (has been updated if isValidate is false)
  * @param verSource how to get latest locale package version source: npm, git or both
  * @param filter function to filter packages need to sync versions
  * @param isValidate whether just validate package need to update
@@ -87,7 +87,7 @@ export async function syncLocalPkgVersions(
   return pkgsUpdated
 }
 
-function getAllMatchedPackgeNames(
+function getAllMatchedPackageNames(
   pkgDigest: IPkgDigest,
   generalPkgNames: string[]
 ) {
@@ -108,7 +108,7 @@ function getAllMatchedPackgeNames(
 }
 
 /**
- * sync pkg names from remote npm regisetry but used in local packages
+ * sync pkg names from remote npm registry but used in local packages
  * @param pkgNames
  */
 export async function syncRemotePkgVersions(pkgNames: string[]) {
@@ -119,7 +119,7 @@ export async function syncRemotePkgVersions(pkgNames: string[]) {
   if (groupedPkgNames.general.length) {
     specificPkgNames = allPkgDigests
       .map(pkgDigest =>
-        getAllMatchedPackgeNames(pkgDigest, groupedPkgNames.general)
+        getAllMatchedPackageNames(pkgDigest, groupedPkgNames.general)
       )
       .reduce((acc, cur) => {
         acc = acc.concat(cur)

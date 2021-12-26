@@ -15,7 +15,7 @@ module.exports = {
         }
       }
     ],
-    "@typescript-eslint/interface-name-prefix": ["error", "always"],
+    '@typescript-eslint/interface-name-prefix': ['error', 'always'],
     '@typescript-eslint/explicit-function-return-type': ['off']
   },
   parserOptions: {
