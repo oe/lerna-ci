@@ -30,11 +30,11 @@ export interface ISyncPackageOptions {
  * sync all local packages' version
  *  return all packages' digest info that need to update (has been upated if isValidate is false)
  */
-export async function syncPackageVersions(options: ISyncPackageOptions = { versionSource: EVerSource.LOCAL }) {
+export async function syncPackageVersions(options: ISyncPackageOptions) {
   let allPkgs = await getAllPackageDigests()
   if (options.packageFilter) allPkgs = allPkgs.filter(options.packageFilter)
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const latestVersions = await getLatestVersions(options.versionSource!, allPkgs, options.npmVersionStrategy)
+  const latestVersions = await getLatestVersions(options.versionSource || EVerSource.LOCAL, allPkgs, options.npmVersionStrategy)
   const caretVersions =  fixPackageVersions(latestVersions, '^')
   const pkgsUpdated = allPkgs.filter(item => updatePkg(item, caretVersions , options.checkOnly, latestVersions[item.name]))
   return pkgsUpdated

@@ -26,8 +26,8 @@ export function fixPackageVersions(versionMap: IVersionMap, versionStrategy?: IV
     transformer = versionStrategy
   }
   const result: IVersionMap = {}
-  return Object.keys(versionMap).reduce((acc, cur) => {
-    acc[cur] = transformer(cur, acc[cur])
+  return Object.keys(versionMap).reduce((acc, key) => {
+    acc[key] = transformer(key, versionMap[key])
     return acc
   }, result)
 }
@@ -64,7 +64,6 @@ export async function getSingleVersionFromNpm(name: string, type: INpmVersionStr
   try {
     // actually only tested yarn and npm
     const npmClient = (await getRepoNpmClient()) || 'yarn'
-    console.log('npmClient', npmClient)
     const verStr = await runShellCmd(npmClient, [
       'info',
       name,
@@ -144,18 +143,23 @@ export function updatePkg(
   pkgVersion?: string
 ) {
   const pkgPath = join(pkgDigest.location, 'package.json')
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const pkg = require(pkgPath)
+  const content = fs.readFileSync(pkgPath, 'utf8')
+  // reserve trailing blank, to avoid unnecessary changes
+  let trailing = ''
+  if (/\}(\s+)$/.test(content)) {
+    trailing = RegExp.$1
+  }
+  const pkg = JSON.parse(content)
   let hasChanged = false
   if (pkgVersion) {
-    if (pkgVersion!== pkg.version) {
+    if (pkgVersion !== pkg.version) {
       console.log(
         `[lerna-ci][sync pkg versions] update ${pkg.name}'s version from ${
           pkg.version
         } => ${latestVersions[pkg.name]}`
       )
       hasChanged = true
-      pkg.version = latestVersions[pkg.name]
+      pkg.version = pkgVersion
     }
   }
   const devChanged = updateDepsVersion(pkg.devDependencies, latestVersions)
@@ -164,7 +168,7 @@ export function updatePkg(
   const optDepChanged = updateDepsVersion(pkg.optionalDependencies, latestVersions)
   if (hasChanged || devChanged || depChanged || peerChanged || optDepChanged ) {
     // write file only not in validation mode
-    if (!onlyCheck) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+    if (!onlyCheck) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + trailing)
     return true
   }
   return false
@@ -180,7 +184,7 @@ export function updateDepsVersion(deps: IPackageVersions, versions: IPackageVers
   if (!deps) return hasChanged
   Object.keys(deps).forEach(k => {
     if (k in versions && deps[k] !== versions[k]) {
-      deps[k] = `${versions[k]}`
+      deps[k] = versions[k]
       hasChanged = true
     }
   })

@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { cosmiconfig } from 'cosmiconfig'
 import { join } from 'path'
 import { syncPackageVersions, detectLerna, EVerSource, syncPackageDependenceVersion } from '../index'

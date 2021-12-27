@@ -75,7 +75,7 @@ export async function getAllPackageDigests(filter?: IPackageFilter | IPackageFil
   /**
    * don't install from npm remote if lerna not installed
    */
-  const args = ['--no-install', 'lerna', 'list', '--json']
+  const args = ['--no-install', 'lerna', 'list', '-a', '--json']
   // if (needPrivate) args.push('--all')
   // if (searchKwd) args.push(searchKwd)
   const pkgsString = await runNpmCmd(...args)
