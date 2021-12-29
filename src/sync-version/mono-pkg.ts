@@ -30,7 +30,7 @@ export interface ISyncPackageOptions {
  * sync all local packages' version
  *  return all packages' digest info that need to update (has been upated if isValidate is false)
  */
-export async function syncPackageVersions(options: ISyncPackageOptions) {
+export async function syncPackageVersions(options: ISyncPackageOptions = {}) {
   let allPkgs = await getAllPackageDigests()
   if (options.packageFilter) allPkgs = allPkgs.filter(options.packageFilter)
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
