@@ -2,7 +2,14 @@ import { join } from 'path'
 import { groupPkgNames, uniqArray, maxVersion } from '../utils'
 import { getAllPackageDigests, IPackageFilter} from '../pkg-info'
 import { IPackageDigest, IPackageVersions, EVerSource } from '../types'
-import { updatePkg, getVersionsFromNpm, getLatestPkgVersFromGit, fixPackageVersions, INpmVersionStrategy } from './common'
+import {
+  updatePkg,
+  getVersionsFromNpm,
+  getLatestPkgVersFromGit,
+  fixPackageVersions,
+  INpmVersionStrategy,
+  IVersionStrategy
+} from './common'
 
 export interface ISyncPackageOptions {
   /**
@@ -11,14 +18,18 @@ export interface ISyncPackageOptions {
    */
   versionSource?: EVerSource
   /**
-   * npm version strategy
+   * npm/git version strategy
    *  default to 'latest'
    */
-  npmVersionStrategy?: INpmVersionStrategy
+  versionStrategy?: INpmVersionStrategy
   /**
    * filter which package should be synced
    */
   packageFilter?: IPackageFilter
+  /**
+   * version range strategy 
+   */
+  versionRangeStrategy?: IVersionStrategy
   /**
    * only check, with package.json files untouched
    * validate package whether need to update, don't change package.json file actually
@@ -34,8 +45,8 @@ export async function syncPackageVersions(options: ISyncPackageOptions = {}) {
   let allPkgs = await getAllPackageDigests()
   if (options.packageFilter) allPkgs = allPkgs.filter(options.packageFilter)
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const latestVersions = await getLatestVersions(options.versionSource || EVerSource.LOCAL, allPkgs, options.npmVersionStrategy)
-  const caretVersions =  fixPackageVersions(latestVersions, '^')
+  const latestVersions = await getLatestVersions(options.versionSource || EVerSource.LOCAL, allPkgs, options.versionStrategy)
+  const caretVersions =  fixPackageVersions(latestVersions, options.versionRangeStrategy || '^')
   const pkgsUpdated = allPkgs.filter(item => updatePkg(item, caretVersions , options.checkOnly, latestVersions[item.name]))
   return pkgsUpdated
 }
