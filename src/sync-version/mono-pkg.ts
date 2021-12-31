@@ -5,10 +5,10 @@ import { IPackageDigest, IPackageVersions, EVerSource } from '../types'
 import {
   updatePkg,
   getVersionsFromNpm,
-  getLatestPkgVersFromGit,
+  getPackageVersionsFromGit,
   fixPackageVersions,
-  INpmVersionStrategy,
-  IVersionStrategy
+  IVersionStrategy,
+  IVersionRangeStrategy
 } from './common'
 
 export interface ISyncPackageOptions {
@@ -21,7 +21,7 @@ export interface ISyncPackageOptions {
    * npm/git version strategy
    *  default to 'latest'
    */
-  versionStrategy?: INpmVersionStrategy
+  versionStrategy?: IVersionStrategy
   /**
    * filter which package should be synced
    */
@@ -29,7 +29,7 @@ export interface ISyncPackageOptions {
   /**
    * version range strategy 
    */
-  versionRangeStrategy?: IVersionStrategy
+  versionRangeStrategy?: IVersionRangeStrategy
   /**
    * only check, with package.json files untouched
    * validate package whether need to update, don't change package.json file actually
@@ -59,7 +59,7 @@ export async function syncPackageVersions(options: ISyncPackageOptions = {}) {
 async function getLatestVersions(
   verSource: EVerSource,
   pkgs: IPackageDigest[],
-  npmVersionStrategy?: INpmVersionStrategy
+  versionStrategy?: IVersionStrategy
 ) {
   if (!pkgs.length) return {}
   // local package versions
@@ -74,13 +74,13 @@ async function getLatestVersions(
   let npmVers: IPackageVersions = {}
   if (verSource !== EVerSource.GIT) {
     // can not get version from private package
-    npmVers = await getVersionsFromNpm(pkgs.filter(p => !p.private).map(item => item.name), npmVersionStrategy)
+    npmVers = await getVersionsFromNpm(pkgs.filter(p => !p.private).map(item => item.name), versionStrategy)
   }
 
   // versions info from git
   let gitVers: IPackageVersions = {}
   if (verSource !== EVerSource.NPM) {
-    gitVers = await getLatestPkgVersFromGit()
+    gitVers = await getPackageVersionsFromGit(versionStrategy)
   }
 
   const vers: IPackageVersions = {}

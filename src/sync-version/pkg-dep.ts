@@ -1,5 +1,5 @@
 import { getAllPackageDigests } from '../pkg-info'
-import { updatePkg, getVersionsFromNpm, IVersionMap, IVersionStrategy, fixPackageVersions, INpmVersionStrategy } from './common'
+import { updatePkg, getVersionsFromNpm, IVersionMap, IVersionStrategy, fixPackageVersions, IVersionRangeStrategy } from './common'
 
 export interface ISyncDepOptions {
   /** 
@@ -17,11 +17,11 @@ export interface ISyncDepOptions {
    * npm version strategy
    *  default to 'latest'
    */
-  npmVersionStrategy?: INpmVersionStrategy
+  npmVersionStrategy?: IVersionStrategy
   /**
    * version range strategy, use ^ by default
    */
-  versionStrategy?: IVersionStrategy
+  versionStrategy?: IVersionRangeStrategy
 }
 
 const DEFAULT_OPTIONS: ISyncDepOptions = {

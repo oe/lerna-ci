@@ -3,16 +3,17 @@ import fs from 'fs'
 import { join } from 'path'
 import { IPackageVersions, IPackageDigest } from '../types'
 import { getRepoNpmClient } from '../pkg-info'
+import { maxVersion } from './../utils'
 
 export type IVersionMap = IPackageVersions
 type IVerTransform = (name: string, version: string) => string
-export type IVersionStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | IVerTransform
+export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | IVerTransform
 
 /**
  * fix package version, convert version number to a range
  *  {'packageName': '1.xxx' } => {'packageName': '^1.xxx' }
  */
-export function fixPackageVersions(versionMap: IVersionMap, versionStrategy?: IVersionStrategy) {
+export function fixPackageVersions(versionMap: IVersionMap, versionStrategy?: IVersionRangeStrategy) {
   if (!versionStrategy) return versionMap
   let transformer: IVerTransform
   if (typeof versionStrategy === 'string') {
@@ -35,7 +36,7 @@ export function fixPackageVersions(versionMap: IVersionMap, versionStrategy?: IV
 /**
  * get versions from npm server
  */
-export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: INpmVersionStrategy) {
+export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: IVersionStrategy) {
   const result: IPackageVersions = {}
   while (pkgNames.length) {
     const items = pkgNames.splice(-10)
@@ -53,14 +54,14 @@ export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: I
  *  max: max package version
  *  latest: latest release package version
  */
-export type INpmVersionStrategy = 'max' | 'latest'
+export type IVersionStrategy = 'max' | 'latest'
 
 /**
  * get single package version info from npm( via yarn cli )
  * @param name package name
  * @param type version strategy, max version or latest version, default latest
  */
-export async function getSingleVersionFromNpm(name: string, type: INpmVersionStrategy = 'latest'): Promise<string | undefined> {
+export async function getSingleVersionFromNpm(name: string, type: IVersionStrategy = 'latest'): Promise<string | undefined> {
   try {
     // actually only tested yarn and npm
     const npmClient = (await getRepoNpmClient()) || 'yarn'
@@ -85,49 +86,60 @@ export async function getSingleVersionFromNpm(name: string, type: INpmVersionStr
 }
 
 
+const tagVerReg = /^((?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*)@(\d.*)$/
 /**
- * remove version in tag
+ * convert git tag to {name, version}
  * @param tag tag name: @elements/list@1.2.3
  */
-function convertGitTag2Version(tag: string) {
-  return tag.replace(/@\d.*$/, '')
+function convertGitTag(tag: string) {
+  if (tagVerReg.test(tag)) {
+    return {
+      name: RegExp.$1,
+      version: RegExp.$2,
+    }
+  }
+  return
 }
 
 /**
  * get newest tag from remote git server
  */
-export async function getLatestPkgVersFromGit() {
+export async function getPackageVersionsFromGit(type: IVersionStrategy = 'latest') {
   // sync all tags from remote, and prune noexists tags in locale
   await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'])
+  // git semver sorting failed to sort with prerelease version // ['tag', '-l', '|', 'sort', '-V', '--reverse']
+  const tagArgs = ['tag', '-l', '--sort=-creatordate']
   // get tags sort by tag version desc
-  const tags = await runShellCmd('git', [
-    'tag',
-    '-l',
-    '|',
-    'sort',
-    '-V',
-    '--reverse'
-  ])
+  const tags = await runShellCmd('git', tagArgs)
   if (!tags) return {}
-  return tags
-    .trim()
-    .split('\n')
-    .reduce((acc, cur) => {
-      const last = acc[acc.length - 1]
-      if (last && convertGitTag2Version(last) === convertGitTag2Version(cur)) return acc
-      acc.push(cur)
-      return acc
-    }, [] as string[])
-    .reduce((acc, cur) => {
-      const tagVerReg = /^((?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*)@(\d.*)$/
-      const matches = tagVerReg.exec(cur)
-      if (matches) {
-        acc[matches[1]] = matches[2]
+  const tagLines = tags.trim().split('\n')
+  if (type === 'latest') {
+    return tagLines.reduce((acc, cur) => {
+      const tagInfo = convertGitTag(cur)
+      if (!tagInfo) return acc
+      if (!acc[tagInfo.name]) {
+        acc[tagInfo.name] = tagInfo.version
       }
       return acc
-    }, {}) as IPackageVersions
+    }, {} as IPackageVersions)
+  } else {
+    const versionMap = tagLines.reduce((acc, cur) => {
+      const tagInfo = convertGitTag(cur)
+      if (!tagInfo) return acc
+      if (!acc[tagInfo.name]) {
+        acc[tagInfo.name] = [tagInfo.version]
+      } else {
+        acc[tagInfo.name].push(tagInfo.version)
+      }
+      return acc
+    }, {} as Record<string, string[]>)
+    return Object.keys(versionMap).reduce((acc, key) => {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      acc[key] = maxVersion(...versionMap[key])!
+      return acc
+    }, {} as IPackageVersions)
+  }
 }
-
 
 /**
  * update a single pkg's package.json, return true if any things updated

@@ -76,11 +76,16 @@ export function groupPkgNames(pkgNames: string[]): IGroupedPkgNames {
   }
 }
 
+/** calc max value with custom compare */
+export function calcMax<V>(list: V[], compare: ((a: V, b: V) => number)): V | undefined {
+  if (!list.length) return
+  return list.reduce((acc, cur) => {
+    return compare(acc, cur) > 0 ? acc : cur
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  }, list.shift()!)
+}
+
 /** get maxVersion of from the given version list  */
 export function maxVersion(...vers: (string | undefined)[]) {
-  const def = '0.0.0'
-  return vers.reduce((res, cur) => {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    return semver.compare(res!, cur || def) > 0 ? res : cur || def
-  }, def)
+  return calcMax(vers.filter(v => !!v) as string[], semver.compare)
 }
