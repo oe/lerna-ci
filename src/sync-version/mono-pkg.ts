@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { groupPkgNames, uniqArray, maxVersion } from '../utils'
-import { getAllPackageDigests, IPackageFilter} from '../pkg-info'
+import { getAllPackageDigests, IPackageFilter, IPackageFilterOptions} from '../pkg-info'
 import { IPackageDigest, IPackageVersions, EVerSource } from '../types'
 import {
   updatePkg,
@@ -13,8 +13,8 @@ import {
 
 export interface ISyncPackageOptions {
   /**
-   * version source
-   * how to get latest locale package version source: npm, git or both
+   * version source, default to `local`
+   * how to get latest locale package versions: npm, git, local or all
    */
   versionSource?: EVerSource
   /**
@@ -25,7 +25,7 @@ export interface ISyncPackageOptions {
   /**
    * filter which package should be synced
    */
-  packageFilter?: IPackageFilter
+  packageFilter?: IPackageFilter | IPackageFilterOptions
   /**
    * version range strategy 
    */
@@ -41,9 +41,8 @@ export interface ISyncPackageOptions {
  * sync all local packages' version
  *  return all packages' digest info that need to update (has been upated if isValidate is false)
  */
-export async function syncPackageVersions(options: ISyncPackageOptions = {}) {
-  let allPkgs = await getAllPackageDigests()
-  if (options.packageFilter) allPkgs = allPkgs.filter(options.packageFilter)
+export async function syncPackageVersions(options: ISyncPackageOptions = {}): Promise<IPackageDigest[]> {
+  const allPkgs = await getAllPackageDigests(options.packageFilter)
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const latestVersions = await getLatestVersions(options.versionSource || EVerSource.LOCAL, allPkgs, options.versionStrategy)
   const caretVersions =  fixPackageVersions(latestVersions, options.versionRangeStrategy || '^')

@@ -68,7 +68,7 @@ export type IPackageFilter = (pkg: IPackageDigest, index: number, arr: IPackageD
 /**
  * get all package's info in a lerna project
  */
-export async function getAllPackageDigests(filter?: IPackageFilter | IPackageFilterOptions) {
+export async function getAllPackageDigests(filter?: IPackageFilter | IPackageFilterOptions): Promise<IPackageDigest[]> {
   const isLernaInstalled = await detectLerna()
   let result: IPackageDigest[] = []
   if (!isLernaInstalled) console.warn('[lerna-ci] lerna not installed')

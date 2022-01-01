@@ -44,9 +44,11 @@ async function main () {
 
   const repoConfig = await getConfig()
 
-  if (needRunAll || args.indexOf('synclocal') !== -1) {
+  if (needRunAll || args[0] === 'synclocal') {
     console.log('[lerna-ci] try to sync local package versions')
-    const options = typeof repoConfig.synclocal === 'string' ? { versionSource: repoConfig.synclocal } : (repoConfig.synclocal || {})
+    const syncLocalConfig = args[1] || repoConfig.synclocal
+    const options = typeof syncLocalConfig === 'string' ? { versionSource: syncLocalConfig } : (syncLocalConfig || {})
+    // @ts-ignore
     const updatedPkgs = await syncPackageVersions(options)
     if (updatedPkgs.length) {
       console.log('[lerna-ci] the following package.json are updated:\n  ' + 
@@ -57,11 +59,16 @@ async function main () {
     console.log('')
   }
 
-  if ((needRunAll || args.indexOf('syncremote') !== -1) && repoConfig.syncremote) {
+  if ((needRunAll || args[0] === 'syncremote')) {
+    const syncRemoteConfig = args.length > 1 ? args.slice(1) : repoConfig.syncremote
+    if (!syncRemoteConfig) {
+      console.log('[lerna-ci] no configuration provided for syncremote, this command has had no effect')
+      return
+    }
     console.log('[lerna-ci] try to sync packages\' dependencies\' versions')
-    const options = Array.isArray(repoConfig.syncremote)
-      ? { packageNames: repoConfig.syncremote }
-      : { versionMap: repoConfig.syncremote}
+    const options = Array.isArray(syncRemoteConfig)
+      ? { packageNames: syncRemoteConfig }
+      : { versionMap: syncRemoteConfig}
     
     const updatedPkgs = await syncPackageDependenceVersion(options)
     if (updatedPkgs.length) {

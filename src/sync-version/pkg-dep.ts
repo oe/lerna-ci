@@ -1,5 +1,13 @@
 import { getAllPackageDigests } from '../pkg-info'
-import { updatePkg, getVersionsFromNpm, IVersionMap, IVersionStrategy, fixPackageVersions, IVersionRangeStrategy } from './common'
+import {
+  updatePkg,
+  getVersionsFromNpm,
+  IVersionMap,
+  IVersionStrategy,
+  fixPackageVersions,
+  IVersionRangeStrategy
+} from './common'
+import { IPackageDigest } from '../types'
 
 export interface ISyncDepOptions {
   /** 
@@ -17,24 +25,25 @@ export interface ISyncDepOptions {
    * npm version strategy
    *  default to 'latest'
    */
-  npmVersionStrategy?: IVersionStrategy
+  versionStrategy?: IVersionStrategy
   /**
    * version range strategy, use ^ by default
    */
-  versionStrategy?: IVersionRangeStrategy
+  versionRangeStrategy?: IVersionRangeStrategy
+  /** only check, with package.json files untouched */
+  checkOnly?: boolean
 }
 
 const DEFAULT_OPTIONS: ISyncDepOptions = {
   versionMap: {},
-  versionStrategy: '^'
+  versionRangeStrategy: '^'
 }
 
 /**
  * sync all packages' dependencies' versions
  * @param syncOptions options
- * @param checkOnly only check, with package.json files untouched
  */
-export async function syncPackageDependenceVersion(syncOptions: ISyncDepOptions, checkOnly?: boolean) {
+export async function syncPackageDependenceVersion(syncOptions: ISyncDepOptions): Promise<IPackageDigest[]> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgDigests = await getAllPackageDigests()
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -43,11 +52,11 @@ export async function syncPackageDependenceVersion(syncOptions: ISyncDepOptions,
     const pkgsHasVersion = Object.keys(versionMap)
     const pkgsWithoutVersion = options.packageNames.filter(n => pkgsHasVersion.indexOf(n) === -1)
     if (pkgsWithoutVersion.length) {
-      const versionFromNpm = await getVersionsFromNpm(pkgsWithoutVersion, options.npmVersionStrategy)
+      const versionFromNpm = await getVersionsFromNpm(pkgsWithoutVersion, options.versionStrategy)
       Object.assign(versionMap, versionFromNpm)
     }
   }
-  const fixedVersion = fixPackageVersions(versionMap, options.versionStrategy)
-  const pkgsUpdated = allPkgDigests.filter(item => updatePkg(item, fixedVersion, checkOnly))
+  const fixedVersion = fixPackageVersions(versionMap, options.versionRangeStrategy)
+  const pkgsUpdated = allPkgDigests.filter(item => updatePkg(item, fixedVersion, syncOptions.checkOnly))
   return pkgsUpdated
 }
