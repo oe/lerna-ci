@@ -1,3 +1,5 @@
-export * from './sync-pkg-versions'
+export * from './types'
+export * from './sync-version'
 export * from './utils'
-export * from './fix-pkg-json'
+export * from './pkg-info'
+

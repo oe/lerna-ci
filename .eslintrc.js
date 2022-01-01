@@ -3,6 +3,7 @@ module.exports = {
   plugins: ['@typescript-eslint'],
   extends: ['plugin:@typescript-eslint/recommended'],
   rules: {
+    '@typescript-eslint/ban-ts-comment': 'off',
     '@typescript-eslint/indent': ['error', 2],
     '@typescript-eslint/semi': ['error', 'never'],
     quotes: ['error', 'single'],
@@ -15,11 +16,21 @@ module.exports = {
         }
       }
     ],
-    '@typescript-eslint/interface-name-prefix': ['error', 'always'],
+    '@typescript-eslint/naming-convention': [
+      'error',
+      {
+        'selector': 'interface',
+        'format': ['PascalCase'],
+        'custom': {
+          'regex': '^I[A-Z]',
+          'match': true
+        }
+      }
+    ],
     '@typescript-eslint/explicit-function-return-type': ['off']
   },
   parserOptions: {
     ecmaVersion: 6,
     sourceType: 'module'
-  }
+  },
 }

@@ -1,11 +1,10 @@
 {
   "name": "lerna-ci",
-  "version": "0.1.0",
+  "version": "1.0.0-alpha.8",
   "description": "lerna  toolkit  for ci integration with gitlab",
   "main": "dist/index.js",
-  "module": "dist/index.es.js",
   "typings": "dist/index.d.ts",
-  "bin": "./dist/bin/lerna-ci",
+  "bin": "./dist/bin/index.js",
   "repository": "https://github.com/oe/lerna-ci.git",
   "author": "Saiya",
   "license": "MIT",
@@ -13,53 +12,30 @@
     "dev": "ts-node test/index.ts",
     "clean": "rimraf ./dist",
     "prebuild": "yarn run lint && yarn run clean",
-    "build": "rollup -c rollup.config.js",
-    "release": "yarn build && yarn publish",
+    "build": "tsc && chmod +x dist/bin/index.js",
     "lint-message": "echo 'lint code before commit'",
-    "lint": "eslint './src/**/*.{ts,tsx}'"
+    "lint": "eslint './src/**/*.{ts,tsx}'",
+    "release": "yarn build && yarn publish"
   },
   "keywords": [
     "monorepo",
     "lerna",
     "ci/cd"
   ],
-  "husky": {
-    "hooks": {
-      "pre-commit": "yarn run lint-message && yarn run lint --fix"
-    }
-  },
   "dependencies": {
-    "@types/semver": "^6.0.0",
-    "alce": "^1.2.0",
-    "cosmiconfig": "^5.2.1",
+    "@types/semver": "^7.3.9",
+    "cosmiconfig": "^7.0.1",
     "deploy-toolkit": "^0.1.1",
-    "extend-object": "^1.0.0",
-    "semver": "^6.0.0",
-    "yargs": "^13.2.4"
+    "semver": "^7.3.5"
   },
   "devDependencies": {
-    "@babel/cli": "^7.1.5",
-    "@babel/core": "^7.1.6",
-    "@babel/plugin-proposal-class-properties": "^7.1.0",
-    "@babel/plugin-proposal-object-rest-spread": "^7.0.0",
-    "@babel/preset-env": "^7.1.6",
-    "@babel/preset-typescript": "^7.1.0",
-    "@types/fs-extra": "^5.0.4",
-    "@types/node": "8",
-    "@types/ssh2": "^0.5.36",
-    "@typescript-eslint/eslint-plugin": "^1.9.0",
-    "@typescript-eslint/parser": "^1.9.0",
-    "eslint": "^5.16.0",
-    "fs-extra": "^7.0.1",
-    "husky": "^1.1.4",
-    "in-publish": "^2.0.0",
+    "@types/node": "14",
+    "@typescript-eslint/eslint-plugin": "^5.5.0",
+    "@typescript-eslint/parser": "^5.5.0",
+    "eslint": "^8.4.0",
     "rimraf": "^2.6.2",
-    "rollup": "^1.12.4",
-    "rollup-plugin-babel": "^4.3.2",
-    "rollup-plugin-buble": "^0.19.6",
-    "rollup-plugin-typescript2": "^0.21.1",
-    "ts-node": "^7.0.1",
-    "typescript": "^3.5.1"
+    "ts-node": "^10.4.0",
+    "typescript": "^4.5.2"
   },
   "engines": {
     "node": ">=8"
