@@ -2,13 +2,15 @@
 
 import { cosmiconfig } from 'cosmiconfig'
 import { join } from 'path'
-import { syncPackageVersions, detectLerna, EVerSource, syncPackageDependenceVersion } from '../index'
+import { syncPackageVersions, detectLerna, EVerSource, syncPackageDependenceVersion, fixPackageJson  } from '../index'
 
 interface IConfig {
   // package name need to sync
   syncremote?: string[]
   // local package version source: all, git, npm, local
   synclocal?: EVerSource
+  // configuration for fixPackagesJson
+  fixpack?: any
 }
 
 async function getConfig () {
@@ -40,7 +42,7 @@ async function main () {
   }
   const cwd = process.cwd()
 
-  const needRunAll = args.indexOf('all') !== -1
+  const needRunAll = args[0] === 'all'
 
   const repoConfig = await getConfig()
 
@@ -55,6 +57,18 @@ async function main () {
         updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
     } else {
       console.log('[lerna-ci] all package.json files\' are up to update, nothing touched')
+    }
+    console.log('')
+  }
+
+  if (needRunAll || args[0] === 'fixpack') {
+    console.log('[lerna-ci] try to fix local package.json\'s order')
+    const updatedPkgs = await fixPackageJson(repoConfig.fixpack)
+    if (updatedPkgs.length) {
+      console.log('[lerna-ci] the following package.json files are formatted:\n  ' + 
+        updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
+    } else {
+      console.log('[lerna-ci] all package.json files are well formatted, nothing touched')
     }
     console.log('')
   }

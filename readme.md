@@ -176,6 +176,8 @@ export interface ISyncDepOptions {
 
 Tips: you may need to reinstall your dependence via `yarn && yarn lerna bootstrap` or `npm install && npx lerna bootstrap` if anything changed
 
+### fix package.json
+
 
 ## cli commands
 `lerna-ci` also provide some cli commands, so that you do some task with a single line code.
@@ -218,6 +220,6 @@ all these configurations should return an object with the following properties:
 * `syncremote`: same as the params of [syncPackageDependenceVersion](#syncpackagedependenceversionoptions)
 
 
-## breaking changes on version 1.0
+## breaking changes
 1. fixpack has been removed from lerna-ci, you may use [fixpack](https://github.com/henrikjoreteg/fixpack) instead, it has been much more complete 
 2. most useful methods are renamed for better understanding, but no more features is removed, you may read docs above to upgrade

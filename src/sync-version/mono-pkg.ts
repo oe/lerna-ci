@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { groupPkgNames, uniqArray, maxVersion } from '../utils'
-import { getAllPackageDigests, IPackageFilter, IPackageFilterOptions} from '../pkg-info'
+import { getAllPackageDigests, IPackageFilterOptions} from '../pkg-info'
 import { IPackageDigest, IPackageVersions, EVerSource } from '../types'
 import {
   updatePkg,
@@ -25,7 +25,7 @@ export interface ISyncPackageOptions {
   /**
    * filter which package should be synced
    */
-  packageFilter?: IPackageFilter | IPackageFilterOptions
+  packageFilter?: IPackageFilterOptions
   /**
    * version range strategy 
    */

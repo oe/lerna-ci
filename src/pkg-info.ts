@@ -55,7 +55,7 @@ export async function getRepoNpmClient() {
 export const getAllPkgDigest = getAllPackageDigests
 
 /** package filter object */
-export interface IPackageFilterOptions {
+export interface IPackageFilterObject {
   /** whether need private package */
   ignorePrivate?: boolean
   /** search package contains the keyword */
@@ -65,10 +65,11 @@ export interface IPackageFilterOptions {
 /** package filter function */
 export type IPackageFilter = (pkg: IPackageDigest, index: number, arr: IPackageDigest[]) => boolean
 
+export type IPackageFilterOptions = IPackageFilterObject | IPackageFilter
 /**
  * get all package's info in a lerna project
  */
-export async function getAllPackageDigests(filter?: IPackageFilter | IPackageFilterOptions): Promise<IPackageDigest[]> {
+export async function getAllPackageDigests(filter?: IPackageFilterOptions): Promise<IPackageDigest[]> {
   const isLernaInstalled = await detectLerna()
   let result: IPackageDigest[] = []
   if (!isLernaInstalled) console.warn('[lerna-ci] lerna not installed')
