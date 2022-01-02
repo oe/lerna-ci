@@ -4,14 +4,14 @@
 import path from 'path'
 import { findFileRecursive } from 'deploy-toolkit'
 import { IPackageDigest } from './types'
-import { detectLerna, runNpmCmd, cleanUpLernaCliOutput } from './utils'
+import { isLernaAvailable, runNpmCmd, cleanUpLernaCliOutput } from './utils'
 
 let rootRepoPkg: IPackageDigest | undefined | null
 
 /**
  * get package digest from repo root
  */
-export function getRepoPackageDigest(): IPackageDigest | null {
+function getRootPackageDigest(): IPackageDigest | null {
   if (typeof rootRepoPkg !== 'undefined') return rootRepoPkg
   const defPkgPath = findFileRecursive('package.json', process.cwd())
   if (defPkgPath) {
@@ -29,23 +29,22 @@ export function getRepoPackageDigest(): IPackageDigest | null {
   return rootRepoPkg
 }
 
-let lernaNpmClient: string | null | undefined
+let lernaNpmClient: string | undefined
 
 /**
  * get lerna monorepo preferred npm client
  */
-export async function getRepoNpmClient() {
+export async function getRepoNpmClient(): Promise<string> {
   if (typeof lernaNpmClient !== 'undefined') return lernaNpmClient
-  const digest = await getRepoPackageDigest()
+  const digest = await getRootPackageDigest()
   if (digest) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const cfg = require(path.join(digest.location, 'lerna.json'))
       lernaNpmClient = cfg.npmClient
     } catch (error) {}
-    
   }
-  if (!lernaNpmClient) lernaNpmClient = null
+  if (!lernaNpmClient) lernaNpmClient = 'npm'
   return lernaNpmClient
 }
 
@@ -55,7 +54,7 @@ export async function getRepoNpmClient() {
 export const getAllPkgDigest = getAllPackageDigests
 
 /** package filter object */
-export interface IPackageFilterOptions {
+export interface IPackageFilterObject {
   /** whether need private package */
   ignorePrivate?: boolean
   /** search package contains the keyword */
@@ -65,11 +64,12 @@ export interface IPackageFilterOptions {
 /** package filter function */
 export type IPackageFilter = (pkg: IPackageDigest, index: number, arr: IPackageDigest[]) => boolean
 
+export type IPackageFilterOptions = IPackageFilterObject | IPackageFilter
 /**
  * get all package's info in a lerna project
  */
-export async function getAllPackageDigests(filter?: IPackageFilter | IPackageFilterOptions): Promise<IPackageDigest[]> {
-  const isLernaInstalled = await detectLerna()
+export async function getAllPackageDigests(filter?: IPackageFilterOptions): Promise<IPackageDigest[]> {
+  const isLernaInstalled = await isLernaAvailable()
   let result: IPackageDigest[] = []
   if (!isLernaInstalled) console.warn('[lerna-ci] lerna not installed')
   /**
@@ -81,7 +81,7 @@ export async function getAllPackageDigests(filter?: IPackageFilter | IPackageFil
   const pkgsString = await runNpmCmd(...args)
   result = JSON.parse(cleanUpLernaCliOutput(pkgsString)) as IPackageDigest[]
   // root package is private by default
-  const selfPkgDigest = await getRepoPackageDigest()
+  const selfPkgDigest = await getRootPackageDigest()
   if (selfPkgDigest) result.push(selfPkgDigest)
   if (!filter) return result
   if (typeof filter === 'object') {

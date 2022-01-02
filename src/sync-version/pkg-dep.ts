@@ -2,12 +2,11 @@ import { getAllPackageDigests } from '../pkg-info'
 import {
   updatePkg,
   getVersionsFromNpm,
-  IVersionMap,
   IVersionStrategy,
-  fixPackageVersions,
+  addRange2VersionMap,
   IVersionRangeStrategy
 } from './common'
-import { IPackageDigest } from '../types'
+import { IPackageDigest, IVersionMap } from '../types'
 
 export interface ISyncDepOptions {
   /** 
@@ -56,7 +55,7 @@ export async function syncPackageDependenceVersion(syncOptions: ISyncDepOptions)
       Object.assign(versionMap, versionFromNpm)
     }
   }
-  const fixedVersion = fixPackageVersions(versionMap, options.versionRangeStrategy)
+  const fixedVersion = addRange2VersionMap(versionMap, options.versionRangeStrategy)
   const pkgsUpdated = allPkgDigests.filter(item => updatePkg(item, fixedVersion, syncOptions.checkOnly))
   return pkgsUpdated
 }

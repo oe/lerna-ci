@@ -32,5 +32,5 @@ export interface IPackageDigest {
 export type IObject<V = unknown> = Record<string, V>
 
 /** package name: package version no.(without `v`) */
-export type IPackageVersions =  IObject<string>
+export type IVersionMap =  IObject<string>
 
