@@ -411,14 +411,11 @@ sync versions of packages in monorepo, using [syncPackageVersions](#syncpackagev
 # with yarn
 yarn lerna-ci synclocal [version source]
 
-# version source, could be git, npm, local, or all, default to local
+# version source, could be: git, npm, local, or all, default to local
 
 # or if you prefer npm
 npx lerna-ci synclocal [version source]
 ```
-
-You may also add a `lerna-ci.synclocal` field to `package.json` in the root of the project, its value is same as the params of [syncPackageVersions](#syncpackageversionsoptions), then you can run command: `yarn lerna-ci synclocal` without extra arguments
-
 
 ### syncremote
 sync all packages' dependencies versions in monorepo, using [syncPackageDependenceVersion](#syncpackagedependenceversion) under the hood
