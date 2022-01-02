@@ -1,7 +1,7 @@
 {
   "name": "lerna-ci",
   "version": "1.0.2",
-  "description": "lerna  toolkit  for ci integration with gitlab",
+  "description": "The essential toolkit for monorepo managed by lerna",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "bin": "./dist/bin/index.js",
@@ -20,6 +20,8 @@
   "keywords": [
     "monorepo",
     "lerna",
+    "lerna-ci",
+    "toolkit",
     "ci/cd"
   ],
   "dependencies": {
