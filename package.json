@@ -1,6 +1,6 @@
 {
   "name": "lerna-ci",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "The essential toolkit for monorepo managed by lerna",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
