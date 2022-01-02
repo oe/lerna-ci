@@ -1,3 +1,8 @@
+/**
+ * default configuration for fixpack
+ *  see https://github.com/HenrikJoreteg/fixpack#configuration for details
+ */
+
 export default {
   'files': [
     'package.json'
@@ -17,6 +22,7 @@ export default {
     'repository',
     'main',
     'module',
+    'exports',
     'types',
     'typings',
     'bin',

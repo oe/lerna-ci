@@ -2,7 +2,7 @@
 
 import { cosmiconfig } from 'cosmiconfig'
 import { join } from 'path'
-import { syncPackageVersions, detectLerna, EVerSource, syncPackageDependenceVersion, fixPackageJson  } from '../index'
+import { syncPackageVersions, isLernaAvailable, EVerSource, syncPackageDependenceVersion, fixPackageJson  } from '../index'
 
 interface IConfig {
   // package name need to sync
@@ -34,7 +34,7 @@ async function main () {
     return
   }
 
-  const isLernaInstalled = await detectLerna()
+  const isLernaInstalled = await isLernaAvailable()
   if (!isLernaInstalled) {
     console.warn(
       '[lerna-ci] lerna not installed.\n  If you are using lerna in this project, \n  please excute `yarn` or `npm` to install lerna'

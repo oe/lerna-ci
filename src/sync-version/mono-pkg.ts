@@ -1,12 +1,11 @@
-import { join } from 'path'
-import { groupPkgNames, uniqArray, maxVersion } from '../utils'
+import { maxVersion } from '../utils'
 import { getAllPackageDigests, IPackageFilterOptions} from '../pkg-info'
-import { IPackageDigest, IPackageVersions, EVerSource } from '../types'
+import { IPackageDigest, IVersionMap, EVerSource } from '../types'
 import {
   updatePkg,
   getVersionsFromNpm,
   getPackageVersionsFromGit,
-  fixPackageVersions,
+  addRange2VersionMap,
   IVersionStrategy,
   IVersionRangeStrategy
 } from './common'
@@ -45,7 +44,7 @@ export async function syncPackageVersions(options: ISyncPackageOptions = {}): Pr
   const allPkgs = await getAllPackageDigests(options.packageFilter)
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const latestVersions = await getLatestVersions(options.versionSource || EVerSource.LOCAL, allPkgs, options.versionStrategy)
-  const caretVersions =  fixPackageVersions(latestVersions, options.versionRangeStrategy || '^')
+  const caretVersions =  addRange2VersionMap(latestVersions, options.versionRangeStrategy || '^')
   const pkgsUpdated = allPkgs.filter(item => updatePkg(item, caretVersions , options.checkOnly, latestVersions[item.name]))
   return pkgsUpdated
 }
@@ -62,7 +61,7 @@ async function getLatestVersions(
 ) {
   if (!pkgs.length) return {}
   // local package versions
-  const localVers: IPackageVersions = {}
+  const localVers: IVersionMap = {}
   pkgs.reduce((acc, cur) => {
     acc[cur.name] = cur.version
     return acc
@@ -70,25 +69,25 @@ async function getLatestVersions(
   if (verSource === EVerSource.LOCAL) return localVers
 
   // versions info from npm
-  let npmVers: IPackageVersions = {}
+  let npmVers: IVersionMap = {}
   if (verSource !== EVerSource.GIT) {
     // can not get version from private package
     npmVers = await getVersionsFromNpm(pkgs.filter(p => !p.private).map(item => item.name), versionStrategy)
   }
 
   // versions info from git
-  let gitVers: IPackageVersions = {}
+  let gitVers: IVersionMap = {}
   if (verSource !== EVerSource.NPM) {
     gitVers = await getPackageVersionsFromGit(versionStrategy)
   }
 
-  const vers: IPackageVersions = {}
+  const vers: IVersionMap = {}
   Object.keys(localVers).reduce((acc, key) => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     acc[key] = maxVersion(npmVers[key], gitVers[key], localVers[key])!
     return acc
   }, vers)
-  const result: IPackageVersions = {}
+  const result: IVersionMap = {}
   pkgs.reduce((acc, item) => {
     if (vers[item.name]) acc[item.name] = vers[item.name]
     return acc
@@ -96,51 +95,3 @@ async function getLatestVersions(
   return result
 }
 
-function getAllMatchedPackageNames(
-  pkgDigest: IPackageDigest,
-  generalPkgNames: string[]
-) {
-  const pkgPath = join(pkgDigest.location, 'package.json')
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const pkg = require(pkgPath)
-  const dependencies = Object.assign(
-    {}, 
-    pkg.devDependencies, 
-    pkg.dependencies, 
-    pkg.peerDependencies, 
-    pkg.optionalDependencies
-  )
-  const pkgNames: string[] = Object.keys(dependencies)
-  return pkgNames.filter(pkgName => {
-    return generalPkgNames.some(item => {
-      return item === pkgName.slice(0, item.length - 1) + '*'
-    })
-  })
-}
-
-/**
- * sync pkg names from remote npm registry but used in local packages
- * @param pkgNames
- */
-export async function syncRemotePkgVersions(pkgNames: string[]) {
-  const allPkgDigests = await getAllPackageDigests()
-  const groupedPkgNames = groupPkgNames(pkgNames)
-
-  let specificPkgNames = groupedPkgNames.specific
-  if (groupedPkgNames.general.length) {
-    specificPkgNames = allPkgDigests
-      .map(pkgDigest =>
-        getAllMatchedPackageNames(pkgDigest, groupedPkgNames.general)
-      )
-      .reduce((acc, cur) => {
-        acc = acc.concat(cur)
-        return acc
-      }, specificPkgNames)
-  }
-
-  const uniqSpecificPkgNames = uniqArray(specificPkgNames)
-
-  const latestVersions = await getVersionsFromNpm(uniqSpecificPkgNames)
-  const pkgsUpdated = allPkgDigests.filter(item => updatePkg(item, latestVersions))
-  return pkgsUpdated
-}

@@ -1,11 +1,10 @@
 import { runShellCmd } from 'deploy-toolkit'
 import fs from 'fs'
 import { join } from 'path'
-import { IPackageVersions, IPackageDigest } from '../types'
+import { IVersionMap, IPackageDigest } from '../types'
 import { getRepoNpmClient } from '../pkg-info'
 import { maxVersion } from './../utils'
 
-export type IVersionMap = IPackageVersions
 type IVerTransform = (name: string, version: string) => string
 export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | IVerTransform
 
@@ -13,18 +12,18 @@ export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | IVerTr
  * fix package version, convert version number to a range
  *  {'packageName': '1.xxx' } => {'packageName': '^1.xxx' }
  */
-export function fixPackageVersions(versionMap: IVersionMap, versionStrategy?: IVersionRangeStrategy) {
-  if (!versionStrategy) return versionMap
+export function addRange2VersionMap(versionMap: IVersionMap, rangeStrategy?: IVersionRangeStrategy) {
+  if (!rangeStrategy) return versionMap
   let transformer: IVerTransform
-  if (typeof versionStrategy === 'string') {
+  if (typeof rangeStrategy === 'string') {
     transformer = (name, ver) => {
-      if (/^\d/.test(ver)) return `${versionStrategy}${ver}`
+      if (/^\d/.test(ver)) return `${rangeStrategy}${ver}`
       // remove = for OCD patient
       if (/^\=\d/.test(ver)) return ver.replace('=', '')
       return ver
     }
   } else {
-    transformer = versionStrategy
+    transformer = rangeStrategy
   }
   const result: IVersionMap = {}
   return Object.keys(versionMap).reduce((acc, key) => {
@@ -36,11 +35,11 @@ export function fixPackageVersions(versionMap: IVersionMap, versionStrategy?: IV
 /**
  * get versions from npm server
  */
-export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: IVersionStrategy) {
-  const result: IPackageVersions = {}
+export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: IVersionStrategy, npmClient?: 'yarn' | 'npm') {
+  const result: IVersionMap = {}
   while (pkgNames.length) {
     const items = pkgNames.splice(-10)
-    const vers = await Promise.all(items.map(name => getSingleVersionFromNpm(name, versionStrategy)))
+    const vers = await Promise.all(items.map(name => getSingleVersionFromNpm(name, versionStrategy, npmClient)))
     vers.forEach((ver, idx) => {
       if (!ver) return
       result[items[idx]] = ver
@@ -61,11 +60,11 @@ export type IVersionStrategy = 'max' | 'latest'
  * @param name package name
  * @param type version strategy, max version or latest version, default latest
  */
-export async function getSingleVersionFromNpm(name: string, type: IVersionStrategy = 'latest'): Promise<string | undefined> {
+export async function getSingleVersionFromNpm(name: string, type: IVersionStrategy = 'latest', npmClient?: 'yarn' | 'npm'): Promise<string | undefined> {
   try {
     // actually only tested yarn and npm
-    const npmClient = (await getRepoNpmClient()) || 'yarn'
-    const verStr = await runShellCmd(npmClient, [
+    const npmClientName = npmClient || (await getRepoNpmClient()) || 'npm'
+    const verStr = await runShellCmd(npmClientName, [
       'info',
       name,
       type === 'latest' ? 'version' : 'versions',
@@ -121,7 +120,7 @@ export async function getPackageVersionsFromGit(type: IVersionStrategy = 'latest
         acc[tagInfo.name] = tagInfo.version
       }
       return acc
-    }, {} as IPackageVersions)
+    }, {} as IVersionMap)
   } else {
     const versionMap = tagLines.reduce((acc, cur) => {
       const tagInfo = convertGitTag(cur)
@@ -137,7 +136,7 @@ export async function getPackageVersionsFromGit(type: IVersionStrategy = 'latest
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       acc[key] = maxVersion(...versionMap[key])!
       return acc
-    }, {} as IPackageVersions)
+    }, {} as IVersionMap)
   }
 }
 
@@ -150,7 +149,7 @@ export async function getPackageVersionsFromGit(type: IVersionStrategy = 'latest
  */
 export function updatePkg(
   pkgDigest: IPackageDigest,
-  latestVersions: IPackageVersions,
+  latestVersions: IVersionMap,
   onlyCheck?: boolean,
   pkgVersion?: string
 ) {
@@ -191,7 +190,7 @@ export function updatePkg(
  * @param deps original deps object
  * @param versions latest package versions
  */
-export function updateDepsVersion(deps: IPackageVersions, versions: IPackageVersions) {
+export function updateDepsVersion(deps: IVersionMap, versions: IVersionMap) {
   let hasChanged = false
   if (!deps) return hasChanged
   Object.keys(deps).forEach(k => {
