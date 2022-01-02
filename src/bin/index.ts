@@ -65,10 +65,10 @@ async function main () {
     console.log('[lerna-ci] try to fix local package.json\'s order')
     const updatedPkgs = await fixPackageJson(repoConfig.fixpack)
     if (updatedPkgs.length) {
-      console.log('[lerna-ci] the following package.json files are formatted:\n  ' + 
+      console.log('\n[lerna-ci] the following package.json files are formatted:\n  ' + 
         updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
     } else {
-      console.log('[lerna-ci] all package.json files are well formatted, nothing touched')
+      console.log('\n[lerna-ci] all package.json files are well formatted, nothing touched')
     }
     console.log('')
   }

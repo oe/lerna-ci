@@ -18,5 +18,10 @@ export interface IFixPackOptions {
 
 export async function fixPackageJson (options: IFixPackOptions = {}): Promise<IPackageDigest[]> {
   const pkgs = await getAllPackageDigests(options.packageFilter)
-  return pkgs.filter((pkg) => fixpack(path.join(pkg.location, 'package.json'), options.config || defaultConfig))
+  const pwd = process.cwd()
+  return pkgs.filter((pkg) => {
+    console.log(`\nchecking '${pkg.name}' in ${pkg.location.replace(pwd, '.')}`)
+    const changed = fixpack(path.join(pkg.location, 'package.json'), options.config || defaultConfig)
+    return changed
+  })
 }

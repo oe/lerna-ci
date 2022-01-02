@@ -42,7 +42,6 @@ export default {
     'author',
     'repository',
     'main',
-    'bugs',
     'license'
   ],
   'warnOnPrivate': [
