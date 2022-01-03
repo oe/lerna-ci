@@ -397,7 +397,7 @@ Type Declarations:
 ```ts
 pickOne<V>(list: V[], compare: ICompare<V>) => V | undefined
 
-// return a if result is 1, or return b
+// return `a` if result >= 0, or return `b`
 type ICompare<V> = ((a: V, b: V) => -1 | 0 | 1
 ```
 
