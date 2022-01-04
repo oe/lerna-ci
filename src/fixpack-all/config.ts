@@ -17,6 +17,7 @@ export default {
     'name',
     'version',
     'description',
+    'private',
     'author',
     'homepage',
     'repository',
@@ -27,14 +28,17 @@ export default {
     'typings',
     'bin',
     'files',
-    'scripts'
+    'scripts',
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
   ],
   'sortedSubItems': [
     'dependencies',
     'devDependencies',
     'peerDependencies',
     'optionalDependencies',
-    'jshintConfig',
     'keywords',
   ],
   'warn': [
