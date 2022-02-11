@@ -1,6 +1,11 @@
 import semver from 'semver'
 import { runShellCmd } from 'deploy-toolkit'
 
+/**
+ * dependence key for package.json
+ */
+export const  PKG_DEP_KEYS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
+
 /** platform detect */
 const isWin = /^win/.test(process.platform)
 

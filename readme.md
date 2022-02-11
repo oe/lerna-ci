@@ -186,6 +186,7 @@ export interface ISyncDepOptions {
   /** 
    * package names that should update
    *  will fetch its version from npm by default
+   *  could be specified package name, or scoped wildcard package name(like @babel/*, @parcel/*)
    */
   packageNames?: string[]
   /**
@@ -421,11 +422,11 @@ npx lerna-ci synclocal [version source]
 sync all packages' dependencies versions in monorepo, using [syncPackageDependenceVersion](#syncpackagedependenceversion) under the hood
 
 ```sh
-# with yarn
-yarn lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN>
+# with yarn, must use quotes when specify scoped wildcard package name
+yarn lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/*"> <"@scopedName2/*"> ... <"@scopedNameN/*"> 
 
-# or if you prefer npm
-npx lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN>
+# or if you prefer npm, must use quotes when specify scoped wildcard package name
+npx lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/*"> <"@scopedName2/*"> ... <"@scopedNameN/*">
 ```
 
 ### fixpack

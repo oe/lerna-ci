@@ -3,7 +3,7 @@ import fs from 'fs'
 import { join } from 'path'
 import { IVersionMap, IPackageDigest } from '../types'
 import { getRepoNpmClient } from '../pkg-info'
-import { maxVersion } from './../utils'
+import { maxVersion, PKG_DEP_KEYS } from './../utils'
 
 type IVerTransform = (name: string, version: string) => string
 export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | IVerTransform
@@ -173,11 +173,12 @@ export function updatePkg(
       pkg.version = pkgVersion
     }
   }
-  const devChanged = updateDepsVersion(pkg.devDependencies, latestVersions)
-  const peerChanged = updateDepsVersion(pkg.peerDependencies, latestVersions)
-  const depChanged = updateDepsVersion(pkg.dependencies, latestVersions)
-  const optDepChanged = updateDepsVersion(pkg.optionalDependencies, latestVersions)
-  if (hasChanged || devChanged || depChanged || peerChanged || optDepChanged ) {
+  PKG_DEP_KEYS.forEach(key => {
+    if (updateDepsVersion(pkg[key], latestVersions)) {
+      hasChanged = true
+    }
+  })
+  if (hasChanged) {
     // write file only not in validation mode
     if (!onlyCheck) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + trailing)
     return true
