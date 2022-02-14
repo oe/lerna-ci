@@ -65,7 +65,7 @@ export async function syncPackageDependenceVersion(syncOptions: ISyncDepOptions)
 }
 
 // match @scope/*
-const SCOPED_PKG_REGEX = /^(@[^/]+\/)\*$/
+const SCOPED_PKG_REGEX = /^(@[^/]+\/[^*]*)\*$/
 /**
  * flat package names according to mono package's all dependencies (e.g. convert @babel/* to all used scoped packages like @babel/core, @babel/preset-env)
  * @param packageNames package names that should update
@@ -87,7 +87,7 @@ function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[
   allPackageNames = results.reduce((acc, cur) => acc.concat(cur), allPackageNames)
   allPackageNames = Array.from(new Set(allPackageNames))
   const scopedPkgNames = allPackageNames.filter(name => scopedNames.some(scope => name.startsWith(scope)))
-  console.log(` found ${scopedPkgNames.length} scoped packages with scopes ${scopedNames.join(', ')}`)
+  console.log(` found ${scopedPkgNames.length} scoped packages with scopes prefix ${scopedNames.join(', ')}`)
   if (scopedPkgNames.length) {
     console.log(`    ${scopedPkgNames.join('\n    ')}`)
   }
