@@ -2,11 +2,11 @@
 
 import { cosmiconfig } from 'cosmiconfig'
 import { join } from 'path'
-import { syncPackageVersions, isLernaAvailable, EVerSource, syncPackageDependenceVersion, fixPackageJson  } from '../index'
+import { syncPackageVersions, isLernaAvailable, EVerSource, syncPackageDependenceVersion, fixPackageJson, ISyncDepOptions  } from '../index'
 
 interface IConfig {
   // package name need to sync
-  syncremote?: string[]
+  syncremote?: string[] | Record<string, string>
   // local package version source: all, git, npm, local
   synclocal?: EVerSource
   // configuration for fixPackagesJson
@@ -81,7 +81,7 @@ async function main () {
     }
     console.log('[lerna-ci] try to sync packages\' dependencies\' versions')
     const options = Array.isArray(syncRemoteConfig)
-      ? { packageNames: syncRemoteConfig }
+      ? parsePackageNames(syncRemoteConfig)
       : { versionMap: syncRemoteConfig}
     
     const updatedPkgs = await syncPackageDependenceVersion(options)
@@ -93,6 +93,26 @@ async function main () {
     }
     console.log('')
   }
+}
+
+/**
+ * parse name to package names and version map
+ * @param names package names need to sync
+ */
+function parsePackageNames(names: string[]) {
+  const result: Required<Pick<ISyncDepOptions, 'packageNames' | 'versionMap'>> = {
+    packageNames: [],
+    versionMap: {}
+  }
+  const exactPkgReg = /^(.+)@(.+)$/
+  return names.reduce((acc, name) => {
+    if (exactPkgReg.test(name)) {
+      acc.versionMap[RegExp.$1] = RegExp.$2
+    } else {
+      acc.packageNames.push(name)
+    }
+    return acc
+  }, result)
 }
 
 main()

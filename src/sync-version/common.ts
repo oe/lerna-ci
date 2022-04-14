@@ -6,24 +6,32 @@ import { getRepoNpmClient } from '../pkg-info'
 import { maxVersion, PKG_DEP_KEYS } from './../utils'
 
 type IVerTransform = (name: string, version: string) => string
-export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | IVerTransform
+/**
+ * version transform strategy
+ *  '' for exact version
+ */
+export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | '' | IVerTransform
 
 /**
  * fix package version, convert version number to a range
  *  {'packageName': '1.xxx' } => {'packageName': '^1.xxx' }
  */
 export function addRange2VersionMap(versionMap: IVersionMap, rangeStrategy?: IVersionRangeStrategy) {
-  if (!rangeStrategy) return versionMap
   let transformer: IVerTransform
-  if (typeof rangeStrategy === 'string') {
-    transformer = (name, ver) => {
-      if (/^\d/.test(ver)) return `${rangeStrategy}${ver}`
-      // remove = for OCD patient
-      if (/^\=\d/.test(ver)) return ver.replace('=', '')
-      return ver
-    }
-  } else {
-    transformer = rangeStrategy
+  switch (typeof rangeStrategy) {
+    case 'string':
+      transformer = (name, ver) => {
+        if (/^\d/.test(ver)) return `${rangeStrategy}${ver}`
+        // remove = for OCD patient
+        if (/^\=\d/.test(ver)) return ver.replace('=', '')
+        return ver
+      }
+      break
+    case 'function':
+      transformer = rangeStrategy
+      break
+    default:
+      return versionMap
   }
   const result: IVersionMap = {}
   return Object.keys(versionMap).reduce((acc, key) => {

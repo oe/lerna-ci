@@ -49,18 +49,18 @@ export async function syncPackageDependenceVersion(syncOptions: ISyncDepOptions)
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgDigests = await getAllPackageDigests()
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const versionMap = options.versionMap!
+  let versionMap = options.versionMap!
   if (options.packageNames) {
     const packageNames = flatPackageNames(options.packageNames, allPkgDigests)
     const pkgsHasVersion = Object.keys(versionMap)
     const pkgsWithoutVersion = packageNames.filter(n => pkgsHasVersion.indexOf(n) === -1)
     if (pkgsWithoutVersion.length) {
       const versionFromNpm = await getVersionsFromNpm(pkgsWithoutVersion, options.versionStrategy)
-      Object.assign(versionMap, versionFromNpm)
+      // add version range to versionFromNpm 
+      versionMap = Object.assign({}, addRange2VersionMap(versionFromNpm, options.versionRangeStrategy), versionMap)
     }
   }
-  const fixedVersion = addRange2VersionMap(versionMap, options.versionRangeStrategy)
-  const pkgsUpdated = allPkgDigests.filter(item => updatePkg(item, fixedVersion, syncOptions.checkOnly))
+  const pkgsUpdated = allPkgDigests.filter(item => updatePkg(item, versionMap, syncOptions.checkOnly))
   return pkgsUpdated
 }
 

@@ -57,6 +57,70 @@ npm install lerna-ci -D
 ```
 you may also install it to global if you use cli commands frequently(not recommended)
 
+## Usage
+
+```sh
+# sync versions of packages in monorepo, to fix versions of packages in monorepo when they are messed up
+yarn lerna-ci synclocal
+
+# sync all packages' dependencies versions
+#   following command will sync all @babel scoped npm packages and typescript to latest version, but react and react-dom will be set to 16.x
+yarn lerna-ci syncremote "@babel/*" "react@16.x" "react-dom@16.x" typescript
+
+# format all package.json files
+yarn lerna-ci fixpack
+
+```
+
+## Cli commands
+`lerna-ci` also provide some cli commands, so that you do some task with a single line code.
+
+### synclocal
+sync versions of packages in monorepo, using [syncPackageVersions](#syncpackageversions) under the hood.
+
+```sh
+# with yarn
+yarn lerna-ci synclocal [version source]
+
+# version source, determine where to get the packages' versions, could be: 
+#   git, npm, local, or all, default to local
+
+# or if you prefer npm
+npx lerna-ci synclocal [version source]
+```
+
+It's very useful when local packages versions are messed up, such as:
+1. publish a beta version inside a package without using lerna
+2. partial success when publish packages with lerna (you may use `yarn lerna-ci synclocal all` to fix it)
+
+You may need to run `yarn` or `npm install` to update lockfile.
+
+### syncremote
+sync all packages' dependencies versions in monorepo, using [syncPackageDependenceVersion](#syncpackagedependenceversion) under the hood
+
+```sh
+# with yarn, must use quotes when specify scoped wildcard package name
+yarn lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/xxx*"> <"@scopedName2/*"> ... <"@scopedNameN/*"> 
+
+# or if you prefer npm, must use quotes when specify scoped wildcard package name
+npx lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/xxx*"> <"@scopedName2/*"> ... <"@scopedNameN/*">
+```
+
+You may need to run `yarn` or `npm install` to update lockfile.
+
+### fixpack
+format all packages' package.json, using [fixPackageJson](#fixpackagejson) under the hood
+
+```sh
+# with yarn
+yarn lerna-ci fixpack
+
+# or if you prefer npm
+npx lerna-ci fixpack
+```
+above command will format all package.json files with default configuration, you can configure `fixpack`'s params via [configuration file](#configurationfile)
+
+
 ## API
 
 ### getAllPackageDigests
@@ -401,45 +465,6 @@ pickOne<V>(list: V[], compare: ICompare<V>) => V | undefined
 // return `a` if result >= 0, or return `b`
 type ICompare<V> = ((a: V, b: V) => -1 | 0 | 1
 ```
-
-## Cli commands
-`lerna-ci` also provide some cli commands, so that you do some task with a single line code.
-
-### synclocal
-sync versions of packages in monorepo, using [syncPackageVersions](#syncpackageversions) under the hood
-
-```sh
-# with yarn
-yarn lerna-ci synclocal [version source]
-
-# version source, could be: git, npm, local, or all, default to local
-
-# or if you prefer npm
-npx lerna-ci synclocal [version source]
-```
-
-### syncremote
-sync all packages' dependencies versions in monorepo, using [syncPackageDependenceVersion](#syncpackagedependenceversion) under the hood
-
-```sh
-# with yarn, must use quotes when specify scoped wildcard package name
-yarn lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/xxx*"> <"@scopedName2/*"> ... <"@scopedNameN/*"> 
-
-# or if you prefer npm, must use quotes when specify scoped wildcard package name
-npx lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/xxx*"> <"@scopedName2/*"> ... <"@scopedNameN/*">
-```
-
-### fixpack
-format all packages' package.json, using [fixPackageJson](#fixpackagejson) under the hood
-
-```sh
-# with yarn
-yarn lerna-ci fixpack
-
-# or if you prefer npm
-npx lerna-ci fixpack
-```
-above command will format all package.json files with default configuration, you can configure `fixpack`'s params via [configuration file](#configurationfile)
 
 
 ## Configuration file

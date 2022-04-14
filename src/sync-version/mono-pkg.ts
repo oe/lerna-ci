@@ -36,15 +36,22 @@ export interface ISyncPackageOptions {
   checkOnly?: boolean
 }
 
+const DEFAULT_OPTIONS: ISyncPackageOptions = {
+  versionSource: EVerSource.LOCAL,
+  versionStrategy: 'latest',
+  versionRangeStrategy: '^',
+}
+
 /**
  * sync all local packages' version
  *  return all packages' digest info that need to update (has been upated if isValidate is false)
  */
-export async function syncPackageVersions(options: ISyncPackageOptions = {}): Promise<IPackageDigest[]> {
+export async function syncPackageVersions(syncOptions: ISyncPackageOptions = {}): Promise<IPackageDigest[]> {
+  const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgs = await getAllPackageDigests(options.packageFilter)
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const latestVersions = await getLatestVersions(options.versionSource || EVerSource.LOCAL, allPkgs, options.versionStrategy)
-  const caretVersions =  addRange2VersionMap(latestVersions, options.versionRangeStrategy || '^')
+  const latestVersions = await getLatestVersions(options.versionSource!, allPkgs, options.versionStrategy)
+  const caretVersions =  addRange2VersionMap(latestVersions, options.versionRangeStrategy)
   const pkgsUpdated = allPkgs.filter(item => updatePkg(item, caretVersions , options.checkOnly, latestVersions[item.name]))
   return pkgsUpdated
 }
