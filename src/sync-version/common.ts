@@ -203,10 +203,41 @@ export function updateDepsVersion(deps: IVersionMap, versions: IVersionMap) {
   let hasChanged = false
   if (!deps) return hasChanged
   Object.keys(deps).forEach(k => {
-    if (k in versions && deps[k] !== versions[k]) {
-      deps[k] = versions[k]
+    const ver = getVersion(versions, k)
+    if (ver && deps[k] !== ver) {
+      deps[k] = ver
       hasChanged = true
     }
   })
   return hasChanged
+}
+
+/**
+ * get version by name from versions map
+ * 
+ * @example
+ *  versionMap: { '@parcel/*': '^2.3.0', '@parcel/core': '^2.4.0' }
+ * return  '^2.4.0' if name is @parcel/core
+ * return  '^2.3.0' if name is @parcel/css
+ * 
+ * @param versionMap version map
+ * @param name package name
+ * @returns matched version if found
+ */
+function getVersion(versionMap: IVersionMap, name: string) {
+  if(versionMap[name]) return versionMap[name]
+  const key = Object.keys(versionMap).find(k => {
+    const prefix = getScopedPrefix(k)
+    if (!prefix) return false
+    return name.startsWith(prefix)
+  })
+  if (key) return versionMap[key]
+  return
+}
+
+// match @scope/*
+const SCOPED_PKG_REGEX = /^(@[^/]+\/[^*]*)\*$/
+
+export function getScopedPrefix(packageName: string) {
+  return SCOPED_PKG_REGEX.test(packageName) && RegExp.$1
 }

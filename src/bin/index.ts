@@ -46,6 +46,7 @@ async function main () {
 
   const repoConfig = await getConfig()
 
+  // sync packages' versions in monorepo
   if (needRunAll || args[0] === 'synclocal') {
     console.log('[lerna-ci] try to sync local package versions')
     const syncLocalConfig = args[1] || repoConfig.synclocal
@@ -61,6 +62,7 @@ async function main () {
     console.log('')
   }
 
+  // fix all package.json files' writing style
   if (needRunAll || args[0] === 'fixpack') {
     console.log('[lerna-ci] try to fix local package.json\'s order')
     const updatedPkgs = await fixPackageJson(repoConfig.fixpack)
@@ -73,6 +75,7 @@ async function main () {
     console.log('')
   }
 
+  // sync all package.json' dependencies/peerDependencies/devDependencies/optionalDependencies versions
   if ((needRunAll || args[0] === 'syncremote')) {
     const syncRemoteConfig = args.length > 1 ? args.slice(1) : repoConfig.syncremote
     if (!syncRemoteConfig) {

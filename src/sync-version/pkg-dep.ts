@@ -1,15 +1,14 @@
-import path from 'path'
-import fs from 'fs'
 import { getAllPackageDigests } from '../pkg-info'
 import {
   updatePkg,
   getVersionsFromNpm,
   IVersionStrategy,
   addRange2VersionMap,
-  IVersionRangeStrategy
+  IVersionRangeStrategy,
+  getScopedPrefix,
 } from './common'
 import { IPackageDigest, IVersionMap } from '../types'
-import { PKG_DEP_KEYS } from '../utils'
+import { getAllDependencies } from '../utils'
 
 export interface ISyncDepOptions {
   /** 
@@ -64,8 +63,7 @@ export async function syncPackageDependenceVersion(syncOptions: ISyncDepOptions)
   return pkgsUpdated
 }
 
-// match @scope/*
-const SCOPED_PKG_REGEX = /^(@[^/]+\/[^*]*)\*$/
+
 /**
  * flat package names according to mono package's all dependencies (e.g. convert @babel/* to all used scoped packages like @babel/core, @babel/preset-env)
  * @param packageNames package names that should update
@@ -75,33 +73,19 @@ function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[
   const scopedNames:string[] = []
   const normalNames:string[] = []
   packageNames.forEach(name => {
-    if (SCOPED_PKG_REGEX.test(name)) {
-      scopedNames.push(RegExp.$1)
+    const prefix = getScopedPrefix(name)
+    if (prefix) {
+      scopedNames.push(prefix)
     } else {
       normalNames.push(name)
     }
   })
   if (!scopedNames.length) return packageNames
-  const results = allPkgDigests.map(getPackageDependencies)
-  let allPackageNames: string[] = []
-  allPackageNames = results.reduce((acc, cur) => acc.concat(cur), allPackageNames)
-  allPackageNames = Array.from(new Set(allPackageNames))
+  const allPackageNames = getAllDependencies(allPkgDigests)
   const scopedPkgNames = allPackageNames.filter(name => scopedNames.some(scope => name.startsWith(scope)))
   console.log(` found ${scopedPkgNames.length} scoped packages with scopes prefix ${scopedNames.join(', ')}`)
   if (scopedPkgNames.length) {
     console.log(`    ${scopedPkgNames.join('\n    ')}`)
   }
   return normalNames.concat(scopedPkgNames)
-}
-
-function getPackageDependencies(pkgDigest: IPackageDigest) {
-  const pkgPath = path.join(pkgDigest.location, 'package.json')
-  let content = fs.readFileSync(pkgPath, 'utf8')
-  content = JSON.parse(content)
-  let pkgNames: string[] = []
-  PKG_DEP_KEYS.forEach(key => {
-    if (!content[key]) return
-    pkgNames = pkgNames.concat(Object.keys(content[key]))
-  })
-  return pkgNames
 }

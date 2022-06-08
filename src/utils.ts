@@ -1,5 +1,8 @@
+import path from 'path'
+import fs from 'fs'
 import semver from 'semver'
 import { runShellCmd } from 'deploy-toolkit'
+import { IPackageDigest, IVersionMap } from './types'
 
 /**
  * dependence key for package.json
@@ -58,4 +61,23 @@ export function pickOne<V>(list: V[], compare: ((a: V, b: V) => number)): V | un
 /** get maxVersion of from the given version list  */
 export function maxVersion(...vers: (string | undefined)[]) {
   return pickOne(vers.filter(v => !!v) as string[], semver.compare)
+}
+
+function getPackageDependencies(pkgDigest: IPackageDigest, unique?: boolean) {
+  const pkgPath = path.join(pkgDigest.location, 'package.json')
+  let content = fs.readFileSync(pkgPath, 'utf8')
+  content = JSON.parse(content)
+  let pkgNames: string[] = []
+  PKG_DEP_KEYS.forEach(key => {
+    if (!content[key]) return
+    pkgNames = pkgNames.concat(Object.keys(content[key]))
+  })
+  return unique ? Array.from(new Set(pkgNames)) : pkgNames
+}
+
+export function getAllDependencies(allPkgDigests: IPackageDigest[]) {
+  const results = allPkgDigests.map(digest=> getPackageDependencies(digest))
+  let allPackageNames: string[] = []
+  allPackageNames = results.reduce((acc, cur) => acc.concat(cur), allPackageNames)
+  return Array.from(new Set(allPackageNames))
 }
