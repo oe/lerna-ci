@@ -9,7 +9,7 @@ import {
   IPackageDigest,
   IVersionMap,
   getAllDependencies,
-} from 'src/common'
+} from '../common'
 
 export interface ISyncDepOptions {
   /** 
@@ -45,7 +45,7 @@ const DEFAULT_OPTIONS: ISyncDepOptions = {
  * sync all packages' dependencies' versions
  * @param syncOptions options
  */
-export async function syncPackageDependenceVersion(syncOptions: ISyncDepOptions): Promise<IPackageDigest[]> {
+export async function syncRemote(syncOptions: ISyncDepOptions): Promise<IPackageDigest[]> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgDigests = await getAllPackageDigests()
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

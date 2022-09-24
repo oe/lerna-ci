@@ -4,7 +4,7 @@ import {
   getAllPackageDigests,
   IPackageFilterOptions,
   IPackageDigest
-} from 'src/common'
+} from '../common'
 import defaultConfig from './config'
 
 export interface IFixPackOptions {

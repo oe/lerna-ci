@@ -11,7 +11,7 @@ import {
   addRange2VersionMap,
   IVersionStrategy,
   IVersionRangeStrategy
-} from 'src/common'
+} from '../common'
 
 export interface ISyncPackageOptions {
   /**
@@ -49,7 +49,7 @@ const DEFAULT_OPTIONS: ISyncPackageOptions = {
  * sync all local packages' version
  *  return all packages' digest info that need to update (has been upated if isValidate is false)
  */
-export async function syncPackageVersions(syncOptions: ISyncPackageOptions = {}): Promise<IPackageDigest[]> {
+export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<IPackageDigest[]> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgs = await getAllPackageDigests(options.packageFilter)
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

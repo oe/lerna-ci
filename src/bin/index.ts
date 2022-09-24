@@ -2,7 +2,13 @@
 import { cosmiconfig } from 'cosmiconfig'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
-import { syncPackageVersions, EVerSource, syncPackageDependenceVersion, fixPackageJson, ISyncDepOptions  } from '../index'
+import {
+  syncLocal,
+  EVerSource,
+  syncRemote,
+  fixPackageJson,
+  ISyncDepOptions
+} from '../index'
 
 const CLI_NAME = 'lerna-cli'
 const cwd = process.cwd()
@@ -31,10 +37,10 @@ async function getConfig () {
   }
 }
 
-const getVersionRangeOption = (defaultValue?: any)  => ({
+const getVersionRangeOption = ()  => ({
   alias: 'r',
-  default: defaultValue || (() => 'tilde'),
-  describe: 'version range, you can use caret(^), tilde(~), gte(>=), gt(>), eq(=)',
+  default: 'retain',
+  describe: 'version range, you can use caret(^), tilde(~), gte(>=), gt(>), eq(=), retain(keep what it is)',
   coerce: (v) => {
     const rangeMap = { caret: '^', tilde: '~', gte: '>=', gt: '>', eq: '=' }
     const val = rangeMap[v] || (Object.values(rangeMap).includes(v) && v)
@@ -76,15 +82,17 @@ yargs(hideBin(process.argv))
         type: 'string',
         array: false
       })
-      .option('range', getVersionRangeOption()),
+      .option('range', getVersionRangeOption())
+      .version(false)
+      .help(),
     async (argv) => {
       const repoConfig = await getConfig()
       console.log('[lerna-ci] try to sync local package versions')
       const source = argv.source || repoConfig.synclocal?.source || 'all'
-      const versionRange = argv.range || repoConfig.synclocal?.versionRange || '~'
+      const versionRange = argv.range || repoConfig.synclocal?.versionRange
       const options = { versionSource: source, versionRangeStrategy: versionRange }
       // @ts-ignore
-      const updatedPkgs = await syncPackageVersions(options)
+      const updatedPkgs = await syncLocal(options)
       if (updatedPkgs.length) {
         console.log('[lerna-ci] the following package.json are updated:\n  ' + 
         updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
@@ -106,7 +114,9 @@ yargs(hideBin(process.argv))
         type: 'string',
         array: true
       })
-      .option('range', getVersionRangeOption()),
+      .option('range', getVersionRangeOption())
+      .version(false)
+      .help(),
     async (argv) => {
       const repoConfig = await getConfig()
       const syncRemoteConfig = argv.packages?.length ? argv.packages : repoConfig.syncremote
@@ -119,7 +129,7 @@ yargs(hideBin(process.argv))
         ? parsePackageNames(syncRemoteConfig)
         : { versionMap: syncRemoteConfig}
     
-      const updatedPkgs = await syncPackageDependenceVersion(options)
+      const updatedPkgs = await syncRemote(Object.assign({ versionRangeStrategy: argv.range }, options))
       if (updatedPkgs.length) {
         console.log('[lerna-ci] the following package.json files\' dependencies are updated:\n  ' + 
         updatedPkgs.map(item => `${item.location.replace(process.cwd(), '.')}/package.json(${item.name})`).join('\n  '))
@@ -139,7 +149,15 @@ yargs(hideBin(process.argv))
         description: 'next version type, like major, minor, patch or alpha(for test), default to patch',
         default: 'patch',
         choices: ['major', 'minor', 'patch', 'alpha']
-      }),
+      })
+      .options('noPrivate', {
+        alias: 'np',
+        default: true,
+        describe: 'set it true to skip checking private packages',
+        type: 'boolean',
+      })
+      .version(false)
+      .help(),
     async (argv) => {
       console.log('can publish', argv)
     }

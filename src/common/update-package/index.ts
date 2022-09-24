@@ -8,7 +8,7 @@ export type IVerTransform = (name: string, version: string) => string
  * version transform strategy
  *  '' for exact version
  */
-export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | '' | IVerTransform
+export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | '' | 'retain' | IVerTransform
 
 /**
  * fix package version, convert version number to a range
