@@ -34,3 +34,9 @@ export type IObject<V = unknown> = Record<string, V>
 /** package name: package version no.(without `v`) */
 export type IVersionMap =  IObject<string>
 
+/**
+ * npm version strategy
+ *  max: max package version
+ *  latest: latest release package version
+ */
+export type IVersionStrategy = 'max' | 'latest'

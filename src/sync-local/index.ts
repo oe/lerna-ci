@@ -1,14 +1,17 @@
-import { maxVersion } from '../utils'
-import { getAllPackageDigests, IPackageFilterOptions} from '../pkg-info'
-import { IPackageDigest, IVersionMap, EVerSource } from '../types'
 import {
+  maxVersion,
+  IPackageDigest,
+  IVersionMap,
+  EVerSource,
+  getAllPackageDigests,
+  IPackageFilterOptions,
   updatePkg,
   getVersionsFromNpm,
   getPackageVersionsFromGit,
   addRange2VersionMap,
   IVersionStrategy,
   IVersionRangeStrategy
-} from './common'
+} from 'src/common'
 
 export interface ISyncPackageOptions {
   /**

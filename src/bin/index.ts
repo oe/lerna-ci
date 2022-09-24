@@ -2,7 +2,7 @@
 import { cosmiconfig } from 'cosmiconfig'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
-import { syncPackageVersions, isLernaAvailable, EVerSource, syncPackageDependenceVersion, fixPackageJson, ISyncDepOptions  } from '../index'
+import { syncPackageVersions, EVerSource, syncPackageDependenceVersion, fixPackageJson, ISyncDepOptions  } from '../index'
 
 const CLI_NAME = 'lerna-cli'
 const cwd = process.cwd()
@@ -31,11 +31,9 @@ async function getConfig () {
   }
 }
 
-const versionRangeOptions  = {
+const getVersionRangeOption = (defaultValue?: any)  => ({
   alias: 'r',
-  default: () => {
-    return 'tilde'
-  },
+  default: defaultValue || (() => 'tilde'),
   describe: 'version range, you can use caret(^), tilde(~), gte(>=), gt(>), eq(=)',
   coerce: (v) => {
     const rangeMap = { caret: '^', tilde: '~', gte: '>=', gt: '>', eq: '=' }
@@ -45,12 +43,12 @@ const versionRangeOptions  = {
     }
     return val
   }
-}
+})
 
 yargs(hideBin(process.argv))
   .scriptName(CLI_NAME)
   .usage('$0 <cmd> [args]')
-
+  // command fixpack
   .command(
     'fixpack',
     'format all packages\' package.json',
@@ -62,7 +60,7 @@ yargs(hideBin(process.argv))
       await fixPackageJson(repoConfig.fixpack)
     }
   )
-
+  // command synclocal
   .command(
     'synclocal [source]',
     'sync local packages versions to remote(git tags, npm versions)',
@@ -78,7 +76,7 @@ yargs(hideBin(process.argv))
         type: 'string',
         array: false
       })
-      .option('range', versionRangeOptions),
+      .option('range', getVersionRangeOption()),
     async (argv) => {
       const repoConfig = await getConfig()
       console.log('[lerna-ci] try to sync local package versions')
@@ -96,19 +94,19 @@ yargs(hideBin(process.argv))
       console.log('')
     }
   )
-
+  // command syncremote
   .command(
     'syncremote [packages...]',
     'sync packages\' dependencies versions',
     (yargs) => yargs
-      .usage('$0 syncremote <packages...> [--range <versionRange>]')
+      .usage('$0 syncremote [packages...] [--range <versionRange>]')
       .positional('packages', {
         description: 'packages\' names that need to be synced, support: specified package name, package name ',
         // demandOption: true,
         type: 'string',
         array: true
       })
-      .option('range', versionRangeOptions),
+      .option('range', getVersionRangeOption()),
     async (argv) => {
       const repoConfig = await getConfig()
       const syncRemoteConfig = argv.packages?.length ? argv.packages : repoConfig.syncremote
@@ -129,6 +127,21 @@ yargs(hideBin(process.argv))
         console.log('[lerna-ci] all package.json files\' dependencies are up to update, nothing touched')
       }
       console.log('')
+    }
+  )
+
+  .command(
+    'canpublish <versionType>',
+    'check whether it\'s eligible to publish next version',
+    (yargs) => yargs
+      .usage('$0 canpublish <versionType>')
+      .positional('versionType', {
+        description: 'next version type, like major, minor, patch or alpha(for test), default to patch',
+        default: 'patch',
+        choices: ['major', 'minor', 'patch', 'alpha']
+      }),
+    async (argv) => {
+      console.log('can publish', argv)
     }
   )
   // require command or throw an error and output help info

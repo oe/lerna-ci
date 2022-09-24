@@ -1,8 +1,8 @@
 import path from 'path'
 import fs from 'fs'
 import semver from 'semver'
-import { runShellCmd } from 'deploy-toolkit'
-import { IPackageDigest, IVersionMap } from './types'
+import { runShellCmd, findFileRecursive } from 'deploy-toolkit'
+import { IPackageDigest } from './types'
 
 /**
  * dependence key for package.json
@@ -10,42 +10,41 @@ import { IPackageDigest, IVersionMap } from './types'
 export const  PKG_DEP_KEYS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
 
 /** platform detect */
-const isWin = /^win/.test(process.platform)
-
-let isLernaInstalled: undefined | boolean
+export const isWin = /^win/.test(process.platform)
 
 /** run npm command via npx */
 export function runNpmCmd(...args: string[]) {
   return runShellCmd(isWin ? 'npx.cmd' : 'npx', args)
 }
+
+let projectRoot: string
 /**
- * detect whether lerna has been installed
+ * get current project root dir
  */
-export async function isLernaAvailable() {
-  if (typeof isLernaInstalled === 'boolean') return isLernaInstalled
-  try {
-    await runShellCmd(isWin ? 'npx.cmd' : 'npx', [
-      '--no-install',
-      'lerna',
-      '-v'
-    ])
-    isLernaInstalled = true
-    return true
-  } catch {
-    isLernaInstalled = false
-    return false
-  }
+export function getProjectRoot(): string {
+  if (projectRoot) return projectRoot
+  const defPkgPath = findFileRecursive('package.json', process.cwd())
+  projectRoot = path.dirname(defPkgPath)
+  return projectRoot
 }
 
+
+let lernaNpmClient: string | undefined
 /**
- * lerna cli json output not a pure json string, can not be parsed directly
- *  need to remove prefix/suffix
+ * get lerna monorepo preferred npm client
  */
-export function cleanUpLernaCliOutput(str: string): string {
-  return str
-    .split('\n')
-    .filter(l => /^[\s\[\]]/.test(l))
-    .join('\n')
+export async function getRepoNpmClient(): Promise<string> {
+  if (typeof lernaNpmClient !== 'undefined') return lernaNpmClient
+  const rootDir = await getProjectRoot()
+  if (rootDir) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const cfg = require(path.join(rootDir, 'lerna.json'))
+      lernaNpmClient = cfg.npmClient
+    } catch (error) {}
+  }
+  if (!lernaNpmClient) lernaNpmClient = 'npm'
+  return lernaNpmClient
 }
 
 /** calc max value with custom compare */

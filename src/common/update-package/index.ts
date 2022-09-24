@@ -1,11 +1,9 @@
-import { runShellCmd } from 'deploy-toolkit'
 import fs from 'fs'
 import { join } from 'path'
 import { IVersionMap, IPackageDigest } from '../types'
-import { getRepoNpmClient } from '../pkg-info'
-import { maxVersion, PKG_DEP_KEYS } from './../utils'
+import { PKG_DEP_KEYS } from '../utils'
 
-type IVerTransform = (name: string, version: string) => string
+export type IVerTransform = (name: string, version: string) => string
 /**
  * version transform strategy
  *  '' for exact version
@@ -40,113 +38,6 @@ export function addRange2VersionMap(versionMap: IVersionMap, rangeStrategy?: IVe
   }, result)
 }
 
-/**
- * get versions from npm server
- */
-export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: IVersionStrategy, npmClient?: 'yarn' | 'npm') {
-  const result: IVersionMap = {}
-  while (pkgNames.length) {
-    const items = pkgNames.splice(-10)
-    const vers = await Promise.all(items.map(name => getSingleVersionFromNpm(name, versionStrategy, npmClient)))
-    vers.forEach((ver, idx) => {
-      if (!ver) return
-      result[items[idx]] = ver
-    })
-  }
-  return result
-}
-
-/**
- * npm version strategy
- *  max: max package version
- *  latest: latest release package version
- */
-export type IVersionStrategy = 'max' | 'latest'
-
-/**
- * get single package version info from npm( via yarn cli )
- * @param name package name
- * @param type version strategy, max version or latest version, default latest
- */
-export async function getSingleVersionFromNpm(name: string, type: IVersionStrategy = 'latest', npmClient?: 'yarn' | 'npm'): Promise<string | undefined> {
-  try {
-    // actually only tested yarn and npm
-    const npmClientName = npmClient || (await getRepoNpmClient()) || 'npm'
-    const verStr = await runShellCmd(npmClientName, [
-      'info',
-      name,
-      type === 'latest' ? 'version' : 'versions',
-      '--json'
-    ])
-    if (!verStr) return
-    const ver = JSON.parse(verStr)
-    const result  = ver && ver.type ==='inspect' ? ver.data : ver
-    if (type === 'latest') {
-      return typeof result === 'string' ? result : undefined
-    }
-    if (Array.isArray(result)) return result.pop()
-    return ver.data
-  } catch (error) {
-    console.warn(`[lerna-ci] failed to get version of ${name} from npm`, error)
-    return
-  }
-}
-
-
-const tagVerReg = /^((?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*)@(\d.*)$/
-/**
- * convert git tag to {name, version}
- * @param tag tag name: @elements/list@1.2.3
- */
-function convertGitTag(tag: string) {
-  if (tagVerReg.test(tag)) {
-    return {
-      name: RegExp.$1,
-      version: RegExp.$2,
-    }
-  }
-  return
-}
-
-/**
- * get newest tag from remote git server
- */
-export async function getPackageVersionsFromGit(type: IVersionStrategy = 'latest') {
-  // sync all tags from remote, and prune noexists tags in locale
-  await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'])
-  // git semver sorting failed to sort with prerelease version // ['tag', '-l', '|', 'sort', '-V', '--reverse']
-  const tagArgs = ['tag', '-l', '--sort=-creatordate']
-  // get tags sort by tag version desc
-  const tags = await runShellCmd('git', tagArgs)
-  if (!tags) return {}
-  const tagLines = tags.trim().split('\n')
-  if (type === 'latest') {
-    return tagLines.reduce((acc, cur) => {
-      const tagInfo = convertGitTag(cur)
-      if (!tagInfo) return acc
-      if (!acc[tagInfo.name]) {
-        acc[tagInfo.name] = tagInfo.version
-      }
-      return acc
-    }, {} as IVersionMap)
-  } else {
-    const versionMap = tagLines.reduce((acc, cur) => {
-      const tagInfo = convertGitTag(cur)
-      if (!tagInfo) return acc
-      if (!acc[tagInfo.name]) {
-        acc[tagInfo.name] = [tagInfo.version]
-      } else {
-        acc[tagInfo.name].push(tagInfo.version)
-      }
-      return acc
-    }, {} as Record<string, string[]>)
-    return Object.keys(versionMap).reduce((acc, key) => {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      acc[key] = maxVersion(...versionMap[key])!
-      return acc
-    }, {} as IVersionMap)
-  }
-}
 
 /**
  * update a single pkg's package.json, return true if any things updated

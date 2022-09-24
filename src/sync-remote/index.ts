@@ -1,14 +1,15 @@
-import { getAllPackageDigests } from '../pkg-info'
 import {
+  getAllPackageDigests,
   updatePkg,
   getVersionsFromNpm,
   IVersionStrategy,
   addRange2VersionMap,
   IVersionRangeStrategy,
   getScopedPrefix,
-} from './common'
-import { IPackageDigest, IVersionMap } from '../types'
-import { getAllDependencies } from '../utils'
+  IPackageDigest,
+  IVersionMap,
+  getAllDependencies,
+} from 'src/common'
 
 export interface ISyncDepOptions {
   /** 

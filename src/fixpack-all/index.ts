@@ -1,7 +1,10 @@
 import fixpack from 'fixpack'
 import path from 'path'
-import { IPackageDigest } from '../types'
-import { getAllPackageDigests, IPackageFilterOptions} from '../pkg-info'
+import {
+  getAllPackageDigests,
+  IPackageFilterOptions,
+  IPackageDigest
+} from 'src/common'
 import defaultConfig from './config'
 
 export interface IFixPackOptions {
