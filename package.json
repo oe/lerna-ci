@@ -2,12 +2,11 @@
   "name": "lerna-ci",
   "version": "1.0.9",
   "description": "The essential toolkit for monorepo managed by lerna",
+  "author": "Saiya",
+  "repository": "https://github.com/oe/lerna-ci.git",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "bin": "./dist/bin/index.js",
-  "repository": "https://github.com/oe/lerna-ci.git",
-  "author": "Saiya",
-  "license": "MIT",
   "scripts": {
     "dev": "ts-node test/index.ts",
     "clean": "rimraf ./dist",
@@ -17,19 +16,13 @@
     "lint": "eslint './src/**/*.{ts,tsx}'",
     "release": "yarn build && yarn publish"
   },
-  "keywords": [
-    "monorepo",
-    "lerna",
-    "lerna-ci",
-    "toolkit",
-    "ci/cd"
-  ],
   "dependencies": {
     "@types/semver": "^7.3.9",
     "@types/yargs": "^17.0.13",
     "cosmiconfig": "^7.0.1",
     "deploy-toolkit": "^0.1.1",
     "fixpack": "^4.0.0",
+    "picocolors": "^1.0.0",
     "semver": "^7.3.5",
     "yargs": "^17.5.1"
   },
@@ -44,5 +37,13 @@
   },
   "engines": {
     "node": ">=8"
-  }
+  },
+  "keywords": [
+    "ci/cd",
+    "lerna",
+    "lerna-ci",
+    "monorepo",
+    "toolkit"
+  ],
+  "license": "MIT"
 }

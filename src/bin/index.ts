@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { cosmiconfig } from 'cosmiconfig'
+import colors from 'picocolors'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import {
@@ -45,7 +46,7 @@ const getVersionRangeOption = ()  => ({
     const rangeMap = { caret: '^', tilde: '~', gte: '>=', gt: '>', eq: '=' }
     const val = rangeMap[v] || (Object.values(rangeMap).includes(v) && v)
     if (!val) {
-      throw new Error(`unsupported version range ${v}`)
+      throw new Error(colors.red(`unsupported version range "${v}"`))
     }
     return val
   }
@@ -61,7 +62,7 @@ yargs(hideBin(process.argv))
     async () => {
       const repoConfig = await getConfig()
       if (!repoConfig.fixpack) {
-        console.log('custom fixpack config not found, using default config')
+        console.log(colors.dim('custom fixpack config not found, using default config'))
       }
       await fixPackageJson(repoConfig.fixpack)
     }
@@ -150,10 +151,16 @@ yargs(hideBin(process.argv))
         default: 'patch',
         choices: ['major', 'minor', 'patch', 'alpha']
       })
-      .options('noPrivate', {
-        alias: 'np',
+      .options('no-private', {
+        alias: 'n',
         default: true,
-        describe: 'set it true to skip checking private packages',
+        describe: 'set it true to skip checking private packages, default true',
+        type: 'boolean',
+      })
+      .options('check-git', {
+        alias: 'g',
+        default: true,
+        describe: 'check whether git is committed, default true',
         type: 'boolean',
       })
       .version(false)

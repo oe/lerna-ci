@@ -7,7 +7,7 @@ import { IPackageDigest } from './types'
 /**
  * dependence key for package.json
  */
-export const  PKG_DEP_KEYS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
+export const  PKG_DEP_KEYS = <const>['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
 
 /** platform detect */
 export const isWin = /^win/.test(process.platform)

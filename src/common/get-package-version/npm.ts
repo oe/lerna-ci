@@ -1,10 +1,10 @@
 import { runShellCmd } from 'deploy-toolkit'
-import { IVersionStrategy, IVersionMap } from '../types'
+import { IVersionPickStrategy, IVersionMap } from '../types'
 import { getRepoNpmClient } from '../utils'
 /**
  * get versions from npm server
  */
-export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: IVersionStrategy, npmClient?: 'yarn' | 'npm') {
+export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: IVersionPickStrategy, npmClient?: 'yarn' | 'npm') {
   const result: IVersionMap = {}
   while (pkgNames.length) {
     const items = pkgNames.splice(-10)
@@ -22,7 +22,7 @@ export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: I
  * @param name package name
  * @param type version strategy, max version or latest version, default latest
  */
-export async function getSingleVersionFromNpm(name: string, type: IVersionStrategy = 'latest', npmClient?: 'yarn' | 'npm'): Promise<string | undefined> {
+export async function getSingleVersionFromNpm(name: string, type: IVersionPickStrategy = 'latest', npmClient?: 'yarn' | 'npm'): Promise<string | undefined> {
   try {
     // actually only tested yarn and npm
     const npmClientName = npmClient || (await getRepoNpmClient()) || 'npm'

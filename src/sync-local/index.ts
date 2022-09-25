@@ -5,12 +5,12 @@ import {
   EVerSource,
   getAllPackageDigests,
   IPackageFilterOptions,
-  updatePkg,
+  updatePackageJSON,
   getVersionsFromNpm,
   getPackageVersionsFromGit,
-  addRange2VersionMap,
-  IVersionStrategy,
-  IVersionRangeStrategy
+  IVersionPickStrategy,
+  IUpgradeVersionStrategy,
+  getVersionTransformer
 } from '../common'
 
 export interface ISyncPackageOptions {
@@ -23,7 +23,7 @@ export interface ISyncPackageOptions {
    * npm/git version strategy
    *  default to 'latest'
    */
-  versionStrategy?: IVersionStrategy
+  versionStrategy?: IVersionPickStrategy
   /**
    * filter which package should be synced
    */
@@ -31,7 +31,7 @@ export interface ISyncPackageOptions {
   /**
    * version range strategy 
    */
-  versionRangeStrategy?: IVersionRangeStrategy
+  versionRangeStrategy?: IUpgradeVersionStrategy
   /**
    * only check, with package.json files untouched
    * validate package whether need to update, don't change package.json file actually
@@ -54,8 +54,12 @@ export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<
   const allPkgs = await getAllPackageDigests(options.packageFilter)
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const latestVersions = await getLatestVersions(options.versionSource!, allPkgs, options.versionStrategy)
-  const caretVersions =  addRange2VersionMap(latestVersions, options.versionRangeStrategy)
-  const pkgsUpdated = allPkgs.filter(item => updatePkg(item, caretVersions , options.checkOnly, latestVersions[item.name]))
+  const pkgsUpdated = allPkgs.filter(item => updatePackageJSON({
+    pkgDigest: item,
+    latestVersions,
+    versionTransform: getVersionTransformer(options.versionRangeStrategy),
+    checkOnly: options.checkOnly,
+    pkgVersion: latestVersions[item.name]}))
   return pkgsUpdated
 }
 
@@ -67,7 +71,7 @@ export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<
 async function getLatestVersions(
   verSource: EVerSource,
   pkgs: IPackageDigest[],
-  versionStrategy?: IVersionStrategy
+  versionStrategy?: IVersionPickStrategy
 ) {
   if (!pkgs.length) return {}
   // local package versions

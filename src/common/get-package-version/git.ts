@@ -1,5 +1,5 @@
 import { runShellCmd } from 'deploy-toolkit'
-import { IVersionStrategy, IVersionMap } from '../types'
+import { IVersionPickStrategy, IVersionMap } from '../types'
 import { maxVersion } from '../utils'
 /**
  * get package version from git tags
@@ -24,7 +24,7 @@ function convertGitTag(tag: string) {
 /**
  * get newest tag from remote git server
  */
-export async function getPackageVersionsFromGit(type: IVersionStrategy = 'latest') {
+export async function getPackageVersionsFromGit(type: IVersionPickStrategy = 'latest') {
   // sync all tags from remote, and prune noexists tags in locale
   await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'])
   // git semver sorting failed to sort with prerelease version // ['tag', '-l', '|', 'sort', '-V', '--reverse']

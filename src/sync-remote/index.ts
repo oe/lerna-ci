@@ -1,9 +1,9 @@
 import {
   getAllPackageDigests,
-  updatePkg,
+  getVersionTransformer,
   getVersionsFromNpm,
-  IVersionStrategy,
-  addRange2VersionMap,
+  IVersionPickStrategy,
+  updatePackageJSON,
   IVersionRangeStrategy,
   getScopedPrefix,
   IPackageDigest,
@@ -27,7 +27,7 @@ export interface ISyncDepOptions {
    * npm version strategy
    *  default to 'latest'
    */
-  versionStrategy?: IVersionStrategy
+  versionStrategy?: IVersionPickStrategy
   /**
    * version range strategy, use ^ by default
    */
@@ -57,13 +57,17 @@ export async function syncRemote(syncOptions: ISyncDepOptions): Promise<IPackage
     if (pkgsWithoutVersion.length) {
       const versionFromNpm = await getVersionsFromNpm(pkgsWithoutVersion, options.versionStrategy)
       // add version range to versionFromNpm 
-      versionMap = Object.assign({}, addRange2VersionMap(versionFromNpm, options.versionRangeStrategy), versionMap)
+      versionMap = Object.assign({}, versionFromNpm, versionMap)
     }
   }
-  const pkgsUpdated = allPkgDigests.filter(item => updatePkg(item, versionMap, syncOptions.checkOnly))
+  const pkgsUpdated = allPkgDigests.filter(item => updatePackageJSON({
+    pkgDigest: item,
+    latestVersions: versionMap,
+    checkOnly: options.checkOnly,
+    versionTransform: getVersionTransformer(options.versionRangeStrategy)
+  }))
   return pkgsUpdated
 }
-
 
 /**
  * flat package names according to mono package's all dependencies (e.g. convert @babel/* to all used scoped packages like @babel/core, @babel/preset-env)

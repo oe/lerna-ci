@@ -39,4 +39,21 @@ export type IVersionMap =  IObject<string>
  *  max: max package version
  *  latest: latest release package version
  */
-export type IVersionStrategy = 'max' | 'latest'
+export type IVersionPickStrategy = 'max' | 'latest'
+
+/**
+ * custom version transform
+ */
+export type IVerTransform = (name: string, newVersion: string, oldVersion: string) => string
+
+/**
+ * upgrade version strategy
+ */
+export type IUpgradeVersionStrategy = '>' | '~' | '^' | '>=' | '' | 'retain' | IVerTransform 
+/**
+ * version transform strategy
+ *  '' for exact version
+ */
+export type IVersionRangeStrategy = IUpgradeVersionStrategy | '<' | '<='
+
+export type IVersionPublishStrategy = 'major' | 'minor' | 'patch' | 'alpha'
