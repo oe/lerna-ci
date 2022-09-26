@@ -56,4 +56,7 @@ export type IUpgradeVersionStrategy = '>' | '~' | '^' | '>=' | '' | 'retain' | I
  */
 export type IVersionRangeStrategy = IUpgradeVersionStrategy | '<' | '<='
 
+/**
+ * alpha for prerelease
+ */
 export type IVersionPublishStrategy = 'major' | 'minor' | 'patch' | 'alpha'

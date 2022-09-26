@@ -36,7 +36,7 @@ async function getConfig () {
   } catch (error) {
     return {}
   }
-}
+} 
 
 const getVersionRangeOption = ()  => ({
   alias: 'r',
@@ -51,6 +51,23 @@ const getVersionRangeOption = ()  => ({
     return val
   }
 })
+
+const SUPPORTED_NPM_CLIENTS = ['yarn', 'yarn-next', 'npm']
+
+const npmClientOptions = {
+  alias: 'n',
+  describe: 'current repo preferred npm client',
+  coerce: (v) => {
+    if (!v) return v
+    if (/^yarn\(.*)$/.test(v)) {
+      if (RegExp.$1 === '' || RegExp.$1 === '1') return 'yarn'
+      return 'yarn-next'
+    }
+    if (SUPPORTED_NPM_CLIENTS.includes(v)) return v
+    throw new Error(colors.red(`unsupported npm client "${v}"`))
+  },
+  choices: SUPPORTED_NPM_CLIENTS
+}
 
 yargs(hideBin(process.argv))
   .scriptName(CLI_NAME)
@@ -84,6 +101,7 @@ yargs(hideBin(process.argv))
         array: false
       })
       .option('range', getVersionRangeOption())
+      .option('npm', npmClientOptions)
       .version(false)
       .help(),
     async (argv) => {
@@ -116,6 +134,7 @@ yargs(hideBin(process.argv))
         array: true
       })
       .option('range', getVersionRangeOption())
+      .option('npm', npmClientOptions)
       .version(false)
       .help(),
     async (argv) => {

@@ -40,6 +40,8 @@ export async function canPublish(options: ICanPushOptions) {
     }
     return true
   }
+  // check alpha version
   const pkgs = await getAllPackageDigests()
+  
   return false
 }
