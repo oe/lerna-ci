@@ -10,7 +10,8 @@ import {
   getPackageVersionsFromGit,
   IVersionPickStrategy,
   IUpgradeVersionStrategy,
-  getVersionTransformer
+  getVersionTransformer,
+  getGitRoot
 } from '../common'
 
 export interface ISyncPackageOptions {
@@ -92,7 +93,10 @@ async function getLatestVersions(
   // versions info from git
   let gitVers: IVersionMap = {}
   if (verSource !== EVerSource.NPM) {
-    gitVers = await getPackageVersionsFromGit(versionStrategy)
+    const gitRoot = await getGitRoot()
+    if (gitRoot) {
+      gitVers = await getPackageVersionsFromGit(versionStrategy)
+    }
   }
 
   const vers: IVersionMap = {}

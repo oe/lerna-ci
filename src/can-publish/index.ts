@@ -3,7 +3,8 @@ import {
   getAllPackageDigests,
   EVerSource,
   IVersionPublishStrategy,
-  getGitRoot
+  getGitRoot,
+  syncPruneGitTags
 } from '../common'
 import { syncLocal } from '../sync-local'
 
@@ -29,9 +30,12 @@ export async function canPublish(options: ICanPushOptions) {
       checkOnly: true
     })
     if (result.length) {
-      throw new Error('local packages version are not synced to the latest')
+      throw new Error('local packages versions are not synced to the latest, this will break public progress')
     }
     return true
+  }
+  if (gitRoot) {
+    await syncPruneGitTags()
   }
   // check alpha version
   const pkgs = await getAllPackageDigests()
@@ -57,11 +61,14 @@ async function checkGitLocalStatus(checkCommit?: boolean) {
 }
 
 
-
 async function checkGitIsUptoDate() {
   const result = await runShellCmd('git', ['status', '-uno'])
   if (result.includes('is up to date with')) return true
   const lines = result.trim().split('\n').slice(0, 2)
   const msg = lines[1].replace('Your branch', lines[0].replace('On branch ', ''))
   throw new Error(msg)
+}
+
+async function checkNextV(params:type) {
+  
 }

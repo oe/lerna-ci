@@ -93,6 +93,13 @@ export function readPackageJson(pkgPath: string) {
   }
 }
 
+/**
+ * // sync all tags from remote, and prune no-exists tags in locale
+ */
+export async function syncPruneGitTags() {
+  await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'])
+}
+
 function getPackageDependencies(pkgDigest: IPackageDigest, unique?: boolean) {
   const content = readPackageJson(pkgDigest.location)
   let pkgNames: string[] = []
