@@ -13,39 +13,51 @@ export const  PKG_DEP_KEYS = <const>['dependencies', 'devDependencies', 'peerDep
 export const isWin = /^win/.test(process.platform)
 
 /** run npm command via npx */
-export function runNpmCmd(...args: string[]) {
-  return runShellCmd(isWin ? 'npx.cmd' : 'npx', args)
+export async function runNpmCmd(...args: string[]) {
+  const rootPath = await getProjectRoot()
+  return runShellCmd(isWin ? 'npx.cmd' : 'npx', args, { cwd: rootPath })
+}
+
+export async function readRootPkgJson() {
+  const rootRepo = await getProjectRoot()
+  return readPackageJson(rootRepo)
 }
 
 let projectRoot: string
 /**
  * get current project root dir
  */
-export function getProjectRoot(): string {
+export async function getProjectRoot(): Promise<string> {
   if (projectRoot) return projectRoot
-  const defPkgPath = findFileRecursive('package.json', process.cwd())
-  projectRoot = path.dirname(defPkgPath)
+  const gitRoot = await getGitRoot()
+  if (gitRoot && fs.existsSync(path.join(gitRoot, 'package.json'))) {
+    projectRoot = gitRoot
+  } else {
+    const defPkgPath = findFileRecursive('package.json', process.cwd())
+    projectRoot = path.dirname(defPkgPath)
+  }
+  if (!projectRoot) {
+    throw new Error('unable to determine project root path')
+  }
   return projectRoot
 }
 
+let gitRootPath: string | false
 
-let lernaNpmClient: string | undefined
 /**
- * get lerna monorepo preferred npm client
+ * get git root path, return false if not in git repo
  */
-export async function getRepoNpmClient(): Promise<string> {
-  if (typeof lernaNpmClient !== 'undefined') return lernaNpmClient
-  const rootDir = await getProjectRoot()
-  if (rootDir) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const cfg = require(path.join(rootDir, 'lerna.json'))
-      lernaNpmClient = cfg.npmClient
-    } catch (error) {}
+export async function getGitRoot(): Promise<string | false> {
+  if (gitRootPath !== undefined) return gitRootPath
+  try {
+    const result = await runShellCmd('git', ['rev-parse', '--show-toplevel'])
+    gitRootPath = result.trim()
+  } catch (error) {
+    gitRootPath = false
   }
-  if (!lernaNpmClient) lernaNpmClient = 'npm'
-  return lernaNpmClient
+  return gitRootPath
 }
+
 
 /** calc max value with custom compare */
 export function pickOne<V>(list: V[], compare: ((a: V, b: V) => number)): V | undefined {
@@ -62,10 +74,27 @@ export function maxVersion(...vers: (string | undefined)[]) {
   return pickOne(vers.filter(v => !!v) as string[], semver.compare)
 }
 
+/**
+ * get parsed package.json in a package
+ * @param pkgPath package location
+ * @returns 
+ */
+export function readPackageJson(pkgPath: string) {
+  const pkgJsonPath = path.join(pkgPath, 'package.json')
+  // not lerna powered project
+  if (!fs.existsSync(pkgJsonPath)) {
+    throw new Error(`package.json not found in project: ${pkgPath}`)
+  }
+  try {
+    const content = fs.readFileSync(pkgJsonPath, 'utf8')
+    return JSON.parse(content)
+  } catch (error) {
+    throw new Error(`project root's package.json is corrupted, located in ${pkgPath}`)
+  }
+}
+
 function getPackageDependencies(pkgDigest: IPackageDigest, unique?: boolean) {
-  const pkgPath = path.join(pkgDigest.location, 'package.json')
-  let content = fs.readFileSync(pkgPath, 'utf8')
-  content = JSON.parse(content)
+  const content = readPackageJson(pkgDigest.location)
   let pkgNames: string[] = []
   PKG_DEP_KEYS.forEach(key => {
     if (!content[key]) return

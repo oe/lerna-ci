@@ -10,7 +10,9 @@ import { PKG_DEP_KEYS } from './utils'
 export function getVersionTransformer(rangeStrategy?: IVersionRangeStrategy) {
   if (typeof rangeStrategy === 'function') return rangeStrategy
   if (rangeStrategy === 'retain') return retainVersion
-  return (pkgName: string, newVersion: string) => {
+  return (pkgName: string, newVersion: string, oldVersion: string) => {
+    // if existing version not a valid semver version, like *, workspace:*, use existing version
+    if (!/^\d/.test(oldVersion)) return oldVersion
     if (/^\d/.test(newVersion)) return (`${rangeStrategy || ''}${newVersion}`).replace(/^\=/, '')
     // remove = for OCD patient
     if (/^\=\d/.test(newVersion)) return newVersion.replace('=', '')
@@ -19,6 +21,8 @@ export function getVersionTransformer(rangeStrategy?: IVersionRangeStrategy) {
 }
 
 function retainVersion(pkgName: string, newVersion: string, oldVersion: string) {
+  // if existing version not a valid semver version, like *, workspace:*, use existing version
+  if (!/^\d/.test(oldVersion)) return oldVersion
   const prefix = oldVersion.replace(/\d.*$/, '')
   return prefix + newVersion.replace(/^[^\d]+/, '')
 }

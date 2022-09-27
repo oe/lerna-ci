@@ -1,15 +1,19 @@
+import fs from 'fs'
+import path from 'path'
 import { runShellCmd } from 'deploy-toolkit'
 import { IPackageDigest } from '../types'
-import { isWin, runNpmCmd } from '../utils'
-
+import { getProjectRoot, isWin, runNpmCmd } from '../utils'
 
 /**
  * get all package's info in a lerna project
  */
-export async function getAllPackagesViaLerna(): Promise<IPackageDigest[]> {
+export async function getAllPackages(): Promise<IPackageDigest[] | false> {
+  const rootRepo = await getProjectRoot()
+  // not lerna powered project
+  if (!fs.existsSync(path.join(rootRepo, 'lerna.json'))) return false
   const isLernaInstalled = await checkLerna()
   if (!isLernaInstalled) {
-    return []
+    throw new Error('lerna not installed, please install project\' dependencies')
   }
   /**
    * don't install from npm remote if lerna not installed
@@ -38,7 +42,7 @@ let isLernaInstalled: undefined | boolean
 /**
  * detect whether lerna has been installed
  */
-export async function isLernaAvailable() {
+async function isLernaAvailable() {
   if (typeof isLernaInstalled === 'boolean') return isLernaInstalled
   try {
     await runShellCmd(isWin ? 'npx.cmd' : 'npx', [

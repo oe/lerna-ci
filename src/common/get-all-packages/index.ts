@@ -5,7 +5,8 @@
 import path from 'path'
 import { IPackageDigest } from '../types'
 import { getProjectRoot } from '../utils'
-import { getAllPackagesViaLerna } from './lerna'
+import * as lerna from './lerna'
+import * as native from './native-client'
 
 /** package filter object */
 export interface IPackageFilterObject {
@@ -23,7 +24,13 @@ export type IPackageFilterOptions = IPackageFilterObject | IPackageFilter
  * get all package's info in a lerna project
  */
 export async function getAllPackageDigests(filter?: IPackageFilterOptions): Promise<IPackageDigest[]> {
-  const result = await getAllPackagesViaLerna()
+  let result = await lerna.getAllPackages()
+  if (result === false) {
+    result = await native.getAllPackages()
+  }
+  if (!result) {
+    throw new Error('unable to get workspace packages')
+  }
   // root package is private by default
   const selfPkgDigest = await getRootPackageDigest()
   if (selfPkgDigest) result.push(selfPkgDigest)
@@ -45,9 +52,10 @@ let rootRepoPkg: IPackageDigest | undefined | null
 /**
  * get package digest from repo root
  */
-export function getRootPackageDigest(): IPackageDigest | null {
+export async function getRootPackageDigest(): Promise<IPackageDigest | null> {
   if (typeof rootRepoPkg !== 'undefined') return rootRepoPkg
-  const defPkgPath = path.join(getProjectRoot(), 'package.json')
+  const rootPath = await getProjectRoot()
+  const defPkgPath = path.join(rootPath, 'package.json')
   if (defPkgPath) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const pkg = require(defPkgPath)

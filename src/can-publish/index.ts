@@ -1,5 +1,10 @@
 import { runShellCmd } from 'deploy-toolkit'
-import { getAllPackageDigests, EVerSource, IVersionPublishStrategy } from '../common'
+import {
+  getAllPackageDigests,
+  EVerSource,
+  IVersionPublishStrategy,
+  getGitRoot
+} from '../common'
 import { syncLocal } from '../sync-local'
 
 export interface ICanPushOptions {
@@ -9,26 +14,14 @@ export interface ICanPushOptions {
 }
 
 export async function canPublish(options: ICanPushOptions) {
-  try {
-    const gitStatus = await runShellCmd('git', ['status', '--porcelain'])
-    const messages = gitStatus.trim().split('\n')
-    if (messages.length) {
-      if (options.checkCommit) {
-        console.log('local has uncommitted changes')
-      } else {
-        const conflicts = messages.filter(l => l.startsWith('C '))
-        if (conflicts.length) {
-          console.log('local has unsolved conflicts')
-          const conflictFiles = conflicts.map(l => l.replace('C ', ''))
-          console.log(conflictFiles)
-        }
-      }
-    }
-  } catch (error) {
-    if (!options.checkCommit) {
-      console.log('not in a git project')
-    }
+  const gitRoot = await getGitRoot()
+  if (gitRoot) {
+    await checkGitLocalStatus(options.checkCommit)
+    await checkGitIsUptoDate()
+  } else {
+    console.log('not in a git project')
   }
+
   if (options.publishStrategy !== 'alpha') {
     const result = await syncLocal({
       versionRangeStrategy: 'retain',
@@ -42,6 +35,33 @@ export async function canPublish(options: ICanPushOptions) {
   }
   // check alpha version
   const pkgs = await getAllPackageDigests()
-  
+
   return false
+}
+
+async function checkGitLocalStatus(checkCommit?: boolean) {
+  const gitStatus = await runShellCmd('git', ['status', '--porcelain'])
+  const messages = gitStatus.trim().split('\n')
+  if (!messages.length) return true
+  if (checkCommit) {
+    const msg = 'local has uncommitted changes\n' + gitStatus
+    throw new Error(msg)
+  }
+  const conflicts = messages.filter(l => l.startsWith('C '))
+  if (conflicts.length) {
+    const msg = 'local has unsolved conflicts\n'
+    const conflictFiles = conflicts.map(l => l.replace('C ', ''))
+    throw new Error(msg + conflictFiles.join('\n'))
+  }
+  return true
+}
+
+
+
+async function checkGitIsUptoDate() {
+  const result = await runShellCmd('git', ['status', '-uno'])
+  if (result.includes('is up to date with')) return true
+  const lines = result.trim().split('\n').slice(0, 2)
+  const msg = lines[1].replace('Your branch', lines[0].replace('On branch ', ''))
+  throw new Error(msg)
 }
