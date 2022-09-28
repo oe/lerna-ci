@@ -1,5 +1,7 @@
 export * from './types'
+export * from './config'
 export * from './utils'
 export * from './get-all-packages'
 export * from './get-package-version'
 export * from './update-package'
+export * from './logger'

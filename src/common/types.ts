@@ -60,3 +60,48 @@ export type IVersionRangeStrategy = IUpgradeVersionStrategy | '<' | '<='
  * alpha for prerelease
  */
 export type IVersionPublishStrategy = 'major' | 'minor' | 'patch' | 'alpha'
+
+
+/**
+ * package.json changed info
+ */
+export interface IChangedPackage {
+  name: string
+  location: string
+  private: boolean
+  changes: IChangedCategory[]
+}
+
+/**
+ * package.json changed category
+ */
+export interface IChangedCategory {
+  /**
+   * cate: dependencies / devDependencies / peerDependencies / optionalDependencies
+   */
+  name: string
+  /**
+   * changed packages
+   */
+  changes: IChangedPkg[]
+}
+
+
+/**
+ * single changed dependence info
+ */
+export interface IChangedPkg {
+  /**
+   * package name
+   */
+  name: string
+  /**
+   * old version
+   */
+  oldVersion: string
+  /**
+   * new version
+   */
+  newVersion: string
+}
+

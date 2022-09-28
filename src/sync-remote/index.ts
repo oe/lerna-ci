@@ -9,6 +9,7 @@ import {
   IPackageDigest,
   IVersionMap,
   getAllDependencies,
+  IChangedPackage,
 } from '../common'
 
 export interface ISyncDepOptions {
@@ -45,7 +46,7 @@ const DEFAULT_OPTIONS: ISyncDepOptions = {
  * sync all packages' dependencies' versions
  * @param syncOptions options
  */
-export async function syncRemote(syncOptions: ISyncDepOptions): Promise<IPackageDigest[]> {
+export async function syncRemote(syncOptions: ISyncDepOptions): Promise<IChangedPackage[] | false> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgDigests = await getAllPackageDigests()
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -60,13 +61,17 @@ export async function syncRemote(syncOptions: ISyncDepOptions): Promise<IPackage
       versionMap = Object.assign({}, versionFromNpm, versionMap)
     }
   }
-  const pkgsUpdated = allPkgDigests.filter(item => updatePackageJSON({
-    pkgDigest: item,
-    latestVersions: versionMap,
-    checkOnly: options.checkOnly,
-    versionTransform: getVersionTransformer(options.versionRangeStrategy)
-  }))
-  return pkgsUpdated
+  const pkgsUpdated = allPkgDigests.map(item => {
+    const changes = updatePackageJSON({
+      pkgDigest: item,
+      latestVersions: versionMap,
+      versionTransform: getVersionTransformer(options.versionRangeStrategy),
+      checkOnly: options.checkOnly,
+    })
+    return changes && Object.assign({}, item, { changes })
+  }).filter(Boolean)
+  // @ts-ignore
+  return !!pkgsUpdated.length && pkgsUpdated
 }
 
 /**

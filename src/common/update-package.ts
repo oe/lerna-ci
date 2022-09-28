@@ -1,6 +1,13 @@
 import fs from 'fs'
 import { join } from 'path'
-import { IVersionMap, IPackageDigest, IVersionRangeStrategy, IVerTransform } from './types'
+import {
+  IVersionMap,
+  IPackageDigest,
+  IVersionRangeStrategy,
+  IVerTransform,
+  IChangedCategory,
+  IChangedPkg
+} from './types'
 import { PKG_DEP_KEYS } from './utils'
 
 /**
@@ -56,7 +63,7 @@ export interface IUpdatePackageJSONOptions {
  * @param checkOnly only check, with package.json untouched
  * @param pkgVersion current pkg's latest version, without range indicator(aka, >, ^, ~, etc)
  */
-export function updatePackageJSON(options: IUpdatePackageJSONOptions) {
+export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedCategory[] | false {
   const { pkgVersion, pkgDigest, latestVersions, checkOnly, versionTransform } = options
   const pkgPath = join(pkgDigest.location, 'package.json')
   const content = fs.readFileSync(pkgPath, 'utf8')
@@ -65,6 +72,7 @@ export function updatePackageJSON(options: IUpdatePackageJSONOptions) {
   if (/\}(\s+)$/.test(content)) {
     trailing = RegExp.$1
   }
+  const changedCategories: IChangedCategory[] = []
   const pkg = JSON.parse(content)
   let hasChanged = false
   if (pkgVersion) {
@@ -79,34 +87,47 @@ export function updatePackageJSON(options: IUpdatePackageJSONOptions) {
     }
   }
   PKG_DEP_KEYS.forEach(key => {
-    if (updateDepsVersion(pkg[key], latestVersions, versionTransform)) {
+    const changes = updateDepsVersion(pkg[key], latestVersions, versionTransform)
+    if (changes) {
+      changedCategories.push({
+        name: key,
+        changes
+      })
       hasChanged = true
     }
   })
   if (hasChanged) {
     // write file only not in validation mode
     if (!checkOnly) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + trailing)
-    return true
+    return changedCategories
   }
   return false
 }
+
+
 
 /**
  * update deps versions, return true if any pkg's version updated
  * @param deps original deps object
  * @param versions latest package versions
  */
-export function updateDepsVersion(deps: IVersionMap, versions: IVersionMap, versionTransform: IVerTransform) {
+export function updateDepsVersion(deps: IVersionMap, versions: IVersionMap, versionTransform: IVerTransform): IChangedPkg[] | false {
   let hasChanged = false
   if (!deps) return hasChanged
+  const changed: IChangedPkg[] = []
   Object.keys(deps).forEach(name => {
     const ver = getVersion(name, deps[name],  versions, versionTransform)
     if (ver && deps[name] !== ver) {
+      changed.push({
+        name,
+        oldVersion: deps[name],
+        newVersion: ver,
+      })
       deps[name] = ver
       hasChanged = true
     }
   })
-  return hasChanged
+  return hasChanged && changed
 }
 
 /**

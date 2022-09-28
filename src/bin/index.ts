@@ -7,9 +7,14 @@ import {
   syncLocal,
   EVerSource,
   syncRemote,
+  canPublish,
   fixPackageJson,
-  ISyncDepOptions
+  ISyncDepOptions,
+  setConfig,
+  logger,
 } from '../index'
+
+setConfig({ debug: true })
 
 const CLI_NAME = 'lerna-cli'
 const cwd = process.cwd()
@@ -112,7 +117,7 @@ yargs(hideBin(process.argv))
       const options = { versionSource: source, versionRangeStrategy: versionRange }
       // @ts-ignore
       const updatedPkgs = await syncLocal(options)
-      if (updatedPkgs.length) {
+      if (updatedPkgs) {
         console.log('[lerna-ci] the following package.json are updated:\n  ' + 
         updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
       } else {
@@ -150,7 +155,7 @@ yargs(hideBin(process.argv))
         : { versionMap: syncRemoteConfig}
     
       const updatedPkgs = await syncRemote(Object.assign({ versionRangeStrategy: argv.range }, options))
-      if (updatedPkgs.length) {
+      if (updatedPkgs) {
         console.log('[lerna-ci] the following package.json files\' dependencies are updated:\n  ' + 
         updatedPkgs.map(item => `${item.location.replace(process.cwd(), '.')}/package.json(${item.name})`).join('\n  '))
       } else {
@@ -185,7 +190,17 @@ yargs(hideBin(process.argv))
       .version(false)
       .help(),
     async (argv) => {
-      console.log('can publish', argv)
+      const result = await canPublish({
+        // @ts-ignore
+        publishStrategy: argv.versionType,
+        noPrivate: argv.noPrivate,
+        checkCommit: argv.checkGit
+      })
+      if (result.eligible) {
+        logger.success('✨ ready to publish!')
+      } else {
+        logger.error('⚠️ unable to publish, due to some issues')
+      }
     }
   )
   // require command or throw an error and output help info

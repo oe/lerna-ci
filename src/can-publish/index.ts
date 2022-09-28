@@ -5,8 +5,11 @@ import {
   EVerSource,
   IVersionPublishStrategy,
   getGitRoot,
+  IPackageDigest,
   syncPruneGitTags,
   getPkgVersionFormRegistry,
+  logger,
+  IChangedPackage,
 } from '../common'
 import { syncLocal } from '../sync-local'
 
@@ -16,13 +19,40 @@ export interface ICanPushOptions {
   checkCommit?: boolean
 }
 
-export async function canPublish(options: ICanPushOptions) {
+export type IFailPublishReason = { type: 'git-not-clean'; content: IGitStatus }
+| { type: 'git-outdated'; content: IGitSyncStatus }
+| { type: 'local-version-outdated'; content: IChangedPackage[] }
+| { type: 'next-version-unavailable'; content: IPkgVersionAvailability[] }
+
+export interface IPublishQualification {
+  /** whether can publish or not */
+  eligible: boolean
+  /**
+   * has value when ineligible
+   */
+  reasons?: IFailPublishReason[]
+}
+
+export async function canPublish(options: ICanPushOptions): Promise<IPublishQualification> {
   const gitRoot = await getGitRoot()
+  const reasons: IFailPublishReason[] = []
   if (gitRoot) {
-    await checkGitLocalStatus(options.checkCommit)
-    await checkGitIsUptoDate()
+    const gitStatus = await checkGitLocalStatus(options.checkCommit)
+    if (gitStatus.status !== 'clean') {
+      reasons.push({
+        type: 'git-not-clean',
+        content: gitStatus
+      })
+    }
+    const gitSyncStatus =  await checkGitSyncStatus()
+    if (!gitSyncStatus.isUp2dated) {
+      reasons.push({
+        type: 'git-outdated',
+        content: gitSyncStatus
+      })
+    }
   } else {
-    console.log('not in a git project')
+    logger.warn('current project not in a git repo')
   }
 
   if (options.publishStrategy !== 'alpha') {
@@ -31,77 +61,112 @@ export async function canPublish(options: ICanPushOptions) {
       versionSource: EVerSource.ALL,
       checkOnly: true
     })
-    if (result.length) {
-      throw new Error('local packages versions are not synced to the latest, this will break public progress')
+    if (result && result.length) {
+      reasons.push({
+        type: 'local-version-outdated',
+        content: result
+      })
     }
-    return true
+    return { eligible: true}
   }
   if (gitRoot) {
     await syncPruneGitTags()
   }
   // check alpha version
-  const result = await checkNextVersionIsAvailable(options.publishStrategy, !!gitRoot)
-  // if (result)
-  return false
+  const versionAvailable = await checkNextVersionIsAvailable(options.publishStrategy, !!gitRoot)
+  if (versionAvailable !== true) {
+    reasons.push({
+      type: 'next-version-unavailable',
+      content: versionAvailable
+    })
+  }
+  return reasons.length ? { eligible: false, reasons } : { eligible: true }
 }
 
-async function checkGitLocalStatus(checkCommit?: boolean) {
+export interface IGitStatus {
+  status: 'clean' | 'uncommitted' | 'conflicts'
+  files?: string[]
+}
+
+async function checkGitLocalStatus(checkCommit?: boolean): Promise<IGitStatus> {
   const gitStatus = await runShellCmd('git', ['status', '--porcelain'])
   const messages = gitStatus.trim().split('\n')
-  if (!messages.length) return true
+  if (!messages.length) return { status: 'clean' }
   if (checkCommit) {
-    const msg = 'local has uncommitted changes\n' + gitStatus
-    throw new Error(msg)
+    return {
+      status: 'uncommitted',
+      files: messages
+    }
   }
   const conflicts = messages.filter(l => l.startsWith('C '))
   if (conflicts.length) {
-    const msg = 'local has unsolved conflicts\n'
     const conflictFiles = conflicts.map(l => l.replace('C ', ''))
-    throw new Error(msg + conflictFiles.join('\n'))
+    return {
+      status: 'conflicts',
+      files: conflictFiles
+    }
   }
-  return true
+  return { status: 'clean' }
 }
 
+export interface IGitSyncStatus {
+  isUp2dated: boolean
+  message?: string
+}
 
-async function checkGitIsUptoDate() {
+async function checkGitSyncStatus(): Promise<IGitSyncStatus> {
   const result = await runShellCmd('git', ['status', '-uno'])
-  if (result.includes('is up to date with')) return true
+  if (result.includes('is up to date with')) return { isUp2dated: true }
   const lines = result.trim().split('\n').slice(0, 2)
-  const msg = lines[1].replace('Your branch', lines[0].replace('On branch ', ''))
-  throw new Error(msg)
+  const message = lines[1].replace('Your branch', lines[0].replace('On branch ', ''))
+  return {
+    isUp2dated: false,
+    message,
+  }
 }
 
 async function checkNextVersionIsAvailable(publishStrategy: IVersionPublishStrategy, checkGit: boolean) {
   const pkgs = await getAllPackageDigests()
-  const metas = pkgs.map(pkg => ({
-    name: pkg.name,
+  const metas = pkgs.map(pkg => Object.assign({}, pkg, {
     version: pkg.version && getNextVersion(pkg.name, pkg.version, publishStrategy),
-    private: pkg.private
   }))
-  let result = await Promise.all(metas.map(meta => checkPkg(meta, checkGit)))
-  result = result.filter(item => item !== true)
+  let result = await Promise.all(metas.map(meta => checkPkgVersionAvailable(meta, checkGit)))
+  result = result.filter(item => item.available !== true)
   return result.length ? result : true
 }
 
-async function checkPkg(meta: {name: string; version?: string | null; private: boolean}, checkGit: boolean) {
+export interface IPkgVersionAvailability {
+  available: boolean
+  name: string
+  version: string
+  reasons?: Array<'git' | 'npm'>
+}
+
+async function checkPkgVersionAvailable(meta: IPackageDigest, checkGit: boolean): Promise<IPkgVersionAvailability> {
+  const result: IPkgVersionAvailability = {
+    available: true,
+    name: meta.name,
+    version: meta.version,
+  }
   // no version available
-  if (!meta.version) return true
-  const errors: string[] = []
+  if (!meta.version) return result
   if (checkGit) {
     const tagName = `${meta.name}@${meta.version}`
-    const result = await runShellCmd('git', ['tag', '-l', tagName])
-    if (result.trim()) {
-      errors.push(`upcoming tag ${tagName} is existing on git`)
+    const tag = await runShellCmd('git', ['tag', '-l', tagName])
+    if (tag.trim()) {
+      result.available = false
+      result.reasons = [ 'git' ]
     }
   }
   // only check public package for version
   if (!meta.private) {
     const version = await getPkgVersionFormRegistry({pkgName: meta.name, version: meta.version})
     if (version) {
-      errors.push(`${meta.name} upcoming version ${version} is existing on registry`)
+      result.available = false
+      result.reasons = (result.reasons || []).concat(['npm'])
     }
   }
-  return errors.length ? errors : true
+  return result
 }
 
 function getNextVersion(pkgName: string, version: string, publishStrategy: IVersionPublishStrategy) {

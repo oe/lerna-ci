@@ -11,7 +11,8 @@ import {
   IVersionPickStrategy,
   IUpgradeVersionStrategy,
   getVersionTransformer,
-  getGitRoot
+  getGitRoot,
+  IChangedPackage
 } from '../common'
 
 export interface ISyncPackageOptions {
@@ -50,18 +51,26 @@ const DEFAULT_OPTIONS: ISyncPackageOptions = {
  * sync all local packages' version
  *  return all packages' digest info that need to update (has been upated if isValidate is false)
  */
-export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<IPackageDigest[]> {
+export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<IChangedPackage[] | false> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgs = await getAllPackageDigests(options.packageFilter)
+  if (!allPkgs.length) {
+    throw new Error('no packages found in current project')
+  }
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const latestVersions = await getLatestVersions(options.versionSource!, allPkgs, options.versionStrategy)
-  const pkgsUpdated = allPkgs.filter(item => updatePackageJSON({
-    pkgDigest: item,
-    latestVersions,
-    versionTransform: getVersionTransformer(options.versionRangeStrategy),
-    checkOnly: options.checkOnly,
-    pkgVersion: latestVersions[item.name]}))
-  return pkgsUpdated
+  const pkgsUpdated = allPkgs.map(item => {
+    const changes = updatePackageJSON({
+      pkgDigest: item,
+      latestVersions,
+      versionTransform: getVersionTransformer(options.versionRangeStrategy),
+      checkOnly: options.checkOnly,
+      pkgVersion: latestVersions[item.name]
+    })
+    return changes && Object.assign({}, item, { changes })
+  }).filter(Boolean)
+  // @ts-ignore
+  return !!pkgsUpdated.length && pkgsUpdated
 }
 
 /**
@@ -74,7 +83,6 @@ async function getLatestVersions(
   pkgs: IPackageDigest[],
   versionStrategy?: IVersionPickStrategy
 ) {
-  if (!pkgs.length) return {}
   // local package versions
   const localVers: IVersionMap = {}
   pkgs.reduce((acc, cur) => {
