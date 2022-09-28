@@ -22,14 +22,19 @@ const processors: Record<INpmClient, typeof npm> = {
 /**
  * get versions from npm server
  */
-export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: IVersionPickStrategy, npmClient?: 'yarn' | 'npm') {
+export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: IVersionPickStrategy, npmClient?: INpmClient) {
   const result: IVersionMap = {}
+  const client = npmClient || await getRepoNpmClient()
+  if (!processors[client]) {
+    throw new Error('unsupported npm client: ' + client)
+  }
   while (pkgNames.length) {
     const items = pkgNames.splice(-10)
     const vers = await Promise.all(items.map(name => getPkgVersionFormRegistry({
       pkgName: name,
       versionStrategy: versionStrategy || 'max',
-      npmClient
+      // @ts-ignore
+      npmClient: client
     })))
     vers.forEach((ver, idx) => {
       if (!ver) return
@@ -39,12 +44,12 @@ export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: I
   return result
 }
 
-async function getPkgVersionFormRegistry(
+export async function getPkgVersionFormRegistry(
   options: IGetPkgVersionFromRegistryOptions & {npmClient?: INpmClient }): Promise<string> {
   const npmClient = options.npmClient || await getRepoNpmClient()
   const client = processors[npmClient]
   if (!client) {
-    throw new Error('unsupported npm client: ' + options.npmClient)
+    throw new Error('unsupported npm client: ' + npmClient)
   }
   return client.getPkgVersion(options)
 }
@@ -106,10 +111,11 @@ async function try2ReadClientCfg() {
   for (let index = 0; index < files.length; index++) {
     const file = files[index]
     if (file.isFile()) {
-      if (/^\.yarnrc\./.test(file.name)) return 'yarn'
-      if (/^\.npmrc\./.test(file.name)) return 'npm'
-      if (/^pnpm-workspace\./.test(file.name)) return 'pnpm'
-      if (/^\.pnpmfile\./.test(file.name)) return 'pnpm'
+      if (/^\.yarnrc\./.test(file.name) || file.name === 'yarn.lock') return 'yarn'
+      if (/^\.npmrc\./.test(file.name) || file.name === 'package-lock.json') return 'npm'
+      if (/^pnpm-workspace\./.test(file.name)
+        || /^\.pnpmfile\./.test(file.name)
+        || file.name === 'pnpm-lock.yaml') return 'pnpm'
     }
   }
   return false

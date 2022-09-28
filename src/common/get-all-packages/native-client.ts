@@ -1,5 +1,7 @@
 import path from 'path'
+import fs from 'fs'
 import { runShellCmd } from 'deploy-toolkit'
+import findPkgs from 'find-packages'
 import { IPackageDigest } from '../types'
 import { getProjectRoot, readPackageJson, readRootPkgJson } from '../utils'
 import { getRepoNpmClient } from '../get-package-version/npm'
@@ -9,18 +11,19 @@ import { getRepoNpmClient } from '../get-package-version/npm'
 export async function getAllPackages(): Promise<IPackageDigest[] | false> {
   const rootPath = await getProjectRoot()
   const pkgJson = await readRootPkgJson()
+  const client = await getRepoNpmClient()
+  if (fs.existsSync(path.join(rootPath, 'pnpm-workspace.yaml'))) {
+    return await getPackagesViaPnpm(rootPath)
+  }
   // not managed by npm or yarn's workspace feature
   if (!pkgJson.workspaces || !pkgJson.workspaces.length) return false
-  const client = await getRepoNpmClient()
   switch (client) {
     case 'yarn':
       return await getPackagesViaYarn(rootPath)
     case 'yarn-next':
       return await getPackagesViaYarnNext(rootPath)
-    case 'pnpm':
-      return await getPackagesViaPnpm(rootPath)
     case 'npm':    
-      return await getPackagesViaNpm(rootPath)
+      return await getPackagesViaGlob(rootPath, pkgJson.workspaces)
     default:
       return false
   }
@@ -83,28 +86,29 @@ async function getPackagesViaPnpm(rootPath: string): Promise<IPackageDigest[]> {
   try {
     const pkgs = JSON.parse(content)
     return pkgs.map(pkg => {
+      // remove the root package to avoid duplicates
+      if (pkg.path === rootPath) return false
       return {
         name: pkg.name,
         location: pkg.path,
         version: pkg.version,
         private: pkg.private
       }
-    })
+    }).filter(Boolean)
   } catch (error: any) {
     throw new Error(`unable to get workspace packages via pnpm: ${error.message}`)
   }
 }
 
-async function getPackagesViaNpm(rootPath: string): Promise<IPackageDigest[]> {
-  const version = await runShellCmd('npm', ['--version'])
-  // get major version
-  if (Number(version.replace(/\..*$/, '')) < 7) {
-    console.log('rootPath', rootPath)
-    throw new Error(`npm@${version} does not support workspaces`)
-  }
-  // const content = await runShellCmd('npm', ['ls', '-prod', '-ws', '--json'], {
-  //   cwd: rootPath,
-  // })
-  
-  throw new Error('npm workspace management is messed up, currently not support')
+async function getPackagesViaGlob(rootPath: string, workspacePatterns: string[]): Promise<IPackageDigest[]> {
+  // find packages via pnpm's find-packages
+  const pkgs = await findPkgs(rootPath, {
+    patterns: workspacePatterns
+  })
+  return pkgs.map(pkg => ({
+    name: pkg.manifest.name || '',
+    version: pkg.manifest.version || '',
+    private: !!pkg.manifest.private,
+    location: pkg.dir,
+  }))
 }

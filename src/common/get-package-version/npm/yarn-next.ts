@@ -5,5 +5,9 @@ export const getPkgVersion: IGetPkgVersionFromRegistry = async (options): Promis
   const result = await runShellCmd('yarn',
     ['npm', 'info', options.pkgName, '--fields', options.versionStrategy === 'latest' ? 'version' : 'versions'])
   const content = JSON.parse(result).version
-  return options.versionStrategy === 'latest' ? content.version : content.versions.pop()  
+  if (options.versionStrategy === 'latest') return content.version
+  if (options.version) {
+    return content.versions.includes(options.version) ? options.version : ''
+  }
+  return content.versions.pop()
 }
