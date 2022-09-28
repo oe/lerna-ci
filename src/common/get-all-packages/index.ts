@@ -5,6 +5,7 @@
 import path from 'path'
 import { IPackageDigest } from '../types'
 import { getProjectRoot } from '../utils'
+import { logger } from '../logger'
 import * as lerna from './lerna'
 import * as native from './native-client'
 
@@ -24,16 +25,7 @@ export type IPackageFilterOptions = IPackageFilterObject | IPackageFilter
  * get all package's info in a lerna project
  */
 export async function getAllPackageDigests(filter?: IPackageFilterOptions): Promise<IPackageDigest[]> {
-  let result = await lerna.getAllPackages()
-  if (result === false) {
-    result = await native.getAllPackages()
-  }
-  if (!result) {
-    throw new Error('unable to get workspace packages')
-  }
-  // root package is private by default
-  const selfPkgDigest = await getRootPackageDigest()
-  if (selfPkgDigest) result.push(selfPkgDigest)
+  const result = await getAllPkgDigests()
   if (!filter) return result
   if (typeof filter === 'object') {
     const filterOptions = filter
@@ -45,6 +37,24 @@ export async function getAllPackageDigests(filter?: IPackageFilterOptions): Prom
     }
   }
   return result.filter(filter)
+}
+
+let cachedDigests: IPackageDigest[]
+async function getAllPkgDigests() {
+  if (cachedDigests) return cachedDigests
+  let result = await lerna.getAllPackages()
+  if (result === false) {
+    result = await native.getAllPackages()
+  }
+  if (!result) {
+    logger.warn('[lerna-ci] unable to get workspace packages, maybe current project not a monorepo')
+    result = []
+  }
+  // root package is private by default
+  const selfPkgDigest = await getRootPackageDigest()
+  if (selfPkgDigest) result.push(selfPkgDigest)
+  cachedDigests = result
+  return cachedDigests
 }
 
 

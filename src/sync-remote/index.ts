@@ -10,6 +10,7 @@ import {
   IVersionMap,
   getAllDependencies,
   IChangedPackage,
+  logger,
 } from '../common'
 
 export interface ISyncDepOptions {
@@ -93,9 +94,9 @@ function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[
   if (!scopedNames.length) return packageNames
   const allPackageNames = getAllDependencies(allPkgDigests)
   const scopedPkgNames = allPackageNames.filter(name => scopedNames.some(scope => name.startsWith(scope)))
-  console.log(` found ${scopedPkgNames.length} scoped packages with scopes prefix ${scopedNames.join(', ')}`)
+  logger.info(`[lerna-ci] found ${scopedPkgNames.length} scoped packages with scopes prefix ${scopedNames.join(', ')}`)
   if (scopedPkgNames.length) {
-    console.log(`    ${scopedPkgNames.join('\n    ')}`)
+    logger.info(`    ${scopedPkgNames.join('\n    ')}`)
   }
   return normalNames.concat(scopedPkgNames)
 }

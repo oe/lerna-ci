@@ -1,5 +1,6 @@
 import fs from 'fs'
-import { join } from 'path'
+import path from 'path'
+import semver from 'semver'
 import {
   IVersionMap,
   IPackageDigest,
@@ -9,6 +10,7 @@ import {
   IChangedPkg
 } from './types'
 import { PKG_DEP_KEYS } from './utils'
+import { logger } from './logger'
 
 /**
  * get version transformer
@@ -17,7 +19,7 @@ import { PKG_DEP_KEYS } from './utils'
 export function getVersionTransformer(rangeStrategy?: IVersionRangeStrategy) {
   if (typeof rangeStrategy === 'function') return rangeStrategy
   if (rangeStrategy === 'retain') return retainVersion
-  return (pkgName: string, newVersion: string, oldVersion: string) => {
+  return (pkgName: string, oldVersion: string, newVersion: string) => {
     // if existing version not a valid semver version, like *, workspace:*, use existing version
     if (!/^\d/.test(oldVersion)) return oldVersion
     if (/^\d/.test(newVersion)) return (`${rangeStrategy || ''}${newVersion}`).replace(/^\=/, '')
@@ -27,9 +29,20 @@ export function getVersionTransformer(rangeStrategy?: IVersionRangeStrategy) {
   }
 }
 
-function retainVersion(pkgName: string, newVersion: string, oldVersion: string) {
-  // if existing version not a valid semver version, like *, workspace:*, use existing version
-  if (!/^\d/.test(oldVersion)) return oldVersion
+function retainVersion(pkgName: string, oldVersion: string, newVersion: string) {
+  try {
+    new semver.Range(oldVersion)
+    // ignore *
+    if (oldVersion === '*') return oldVersion
+  } catch {
+    // invalid version range(like workspace:*) will throw an error
+    return oldVersion
+  }
+  // using complex range expression
+  if(/\s/.test(oldVersion.trim())) {
+    logger.warn(`[lerna-ci] dependency ${pkgName} has complex version range "${oldVersion}", you should update it manually`)
+    return oldVersion
+  }
   const prefix = oldVersion.replace(/\d.*$/, '')
   return prefix + newVersion.replace(/^[^\d]+/, '')
 }
@@ -65,7 +78,8 @@ export interface IUpdatePackageJSONOptions {
  */
 export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedCategory[] | false {
   const { pkgVersion, pkgDigest, latestVersions, checkOnly, versionTransform } = options
-  const pkgPath = join(pkgDigest.location, 'package.json')
+
+  const pkgPath = path.join(pkgDigest.location, 'package.json')
   const content = fs.readFileSync(pkgPath, 'utf8')
   // reserve trailing blank, to avoid unnecessary changes
   let trailing = ''
@@ -77,12 +91,15 @@ export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedC
   let hasChanged = false
   if (pkgVersion) {
     if (pkgVersion !== pkg.version) {
-      console.log(
-        `[lerna-ci][sync pkg versions] update ${pkg.name}'s version from ${
-          pkg.version
-        } => ${pkgVersion}`
-      )
       hasChanged = true
+      changedCategories.push({
+        field: 'version',
+        changes: [{
+          name: pkg.name,
+          oldVersion: pkg.version,
+          newVersion: pkgVersion,
+        }]
+      })
       pkg.version = pkgVersion
     }
   }
@@ -90,7 +107,7 @@ export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedC
     const changes = updateDepsVersion(pkg[key], latestVersions, versionTransform)
     if (changes) {
       changedCategories.push({
-        name: key,
+        field: key,
         changes
       })
       hasChanged = true
@@ -116,7 +133,7 @@ export function updateDepsVersion(deps: IVersionMap, versions: IVersionMap, vers
   if (!deps) return hasChanged
   const changed: IChangedPkg[] = []
   Object.keys(deps).forEach(name => {
-    const ver = getVersion(name, deps[name],  versions, versionTransform)
+    const ver = getVersion(name, versions, deps[name], versionTransform)
     if (ver && deps[name] !== ver) {
       changed.push({
         name,
@@ -142,7 +159,7 @@ export function updateDepsVersion(deps: IVersionMap, versions: IVersionMap, vers
  * @param name package name
  * @returns matched version if found
  */
-function getVersion(name: string, oldVersion: string, versionMap: IVersionMap, versionTransform: IVerTransform) {
+function getVersion(name: string, versionMap: IVersionMap, oldVersion: string, versionTransform: IVerTransform) {
   if(versionMap[name]) return versionTransform(name, oldVersion, versionMap[name])
   const key = Object.keys(versionMap).filter(k => {
     const prefix = getScopedPrefix(k)

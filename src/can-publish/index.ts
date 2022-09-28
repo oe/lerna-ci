@@ -67,18 +67,18 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
         content: result
       })
     }
-    return { eligible: true}
-  }
-  if (gitRoot) {
-    await syncPruneGitTags()
-  }
-  // check alpha version
-  const versionAvailable = await checkNextVersionIsAvailable(options.publishStrategy, !!gitRoot)
-  if (versionAvailable !== true) {
-    reasons.push({
-      type: 'next-version-unavailable',
-      content: versionAvailable
-    })
+  } else {
+    if (gitRoot) {
+      await syncPruneGitTags()
+    }
+    // check alpha version
+    const versionAvailable = await checkNextVersionIsAvailable(options.publishStrategy, !!gitRoot)
+    if (versionAvailable !== true) {
+      reasons.push({
+        type: 'next-version-unavailable',
+        content: versionAvailable
+      })
+    }
   }
   return reasons.length ? { eligible: false, reasons } : { eligible: true }
 }

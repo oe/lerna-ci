@@ -79,7 +79,7 @@ export interface IChangedCategory {
   /**
    * cate: dependencies / devDependencies / peerDependencies / optionalDependencies
    */
-  name: string
+  field: string
   /**
    * changed packages
    */

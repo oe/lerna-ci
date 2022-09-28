@@ -1,54 +1,28 @@
 #!/usr/bin/env node
-import { cosmiconfig } from 'cosmiconfig'
 import colors from 'picocolors'
-import yargs from 'yargs'
+import yargs, { Options } from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import {
   syncLocal,
-  EVerSource,
   syncRemote,
   canPublish,
   fixPackageJson,
   ISyncDepOptions,
   setConfig,
   logger,
+  SUPPORTED_NPM_CLIENTS,
 } from '../index'
+import { getCliConfig, CLI_NAME, cwd } from './config'
 
 setConfig({ debug: true })
 
-const CLI_NAME = 'lerna-cli'
-const cwd = process.cwd()
-
-interface IConfig {
-  // package name need to sync
-  syncremote?: string[] | Record<string, string>
-  // local package version source: all, git, npm, local
-  synclocal?: {
-    source: EVerSource
-    versionRange: string
-  }
-  // configuration for fixPackagesJson
-  fixpack?: any
-}
-let cachedConfig: IConfig
-async function getConfig () {
-  if (cachedConfig) return cachedConfig
-  const explorer = cosmiconfig(CLI_NAME)
-  try {
-    const result = await explorer.search()
-    cachedConfig = (result?.config || {}) as IConfig
-    return cachedConfig
-  } catch (error) {
-    return {}
-  }
-} 
 
 const getVersionRangeOption = ()  => ({
   alias: 'r',
   default: 'retain',
   describe: 'version range, you can use caret(^), tilde(~), gte(>=), gt(>), eq(=), retain(keep what it is)',
   coerce: (v) => {
-    const rangeMap = { caret: '^', tilde: '~', gte: '>=', gt: '>', eq: '=' }
+    const rangeMap = { caret: '^', tilde: '~', gte: '>=', gt: '>', eq: '=', retain: 'retain' }
     const val = rangeMap[v] || (Object.values(rangeMap).includes(v) && v)
     if (!val) {
       throw new Error(colors.red(`unsupported version range "${v}"`))
@@ -57,14 +31,12 @@ const getVersionRangeOption = ()  => ({
   }
 })
 
-const SUPPORTED_NPM_CLIENTS = ['yarn', 'yarn-next', 'npm']
-
 const npmClientOptions = {
   alias: 'n',
   describe: 'current repo preferred npm client',
   coerce: (v) => {
     if (!v) return v
-    if (/^yarn\(.*)$/.test(v)) {
+    if (/^yarn(.*)$/.test(v)) {
       if (RegExp.$1 === '' || RegExp.$1 === '1') return 'yarn'
       return 'yarn-next'
     }
@@ -72,6 +44,12 @@ const npmClientOptions = {
     throw new Error(colors.red(`unsupported npm client "${v}"`))
   },
   choices: SUPPORTED_NPM_CLIENTS
+}
+
+const checkOnlyOptions: Options = {
+  alias: 'c',
+  describe: 'check for changes with package.jsons untouched',
+  type: 'boolean',
 }
 
 yargs(hideBin(process.argv))
@@ -82,7 +60,7 @@ yargs(hideBin(process.argv))
     'fixpack',
     'format all packages\' package.json',
     async () => {
-      const repoConfig = await getConfig()
+      const repoConfig = await getCliConfig()
       if (!repoConfig.fixpack) {
         console.log(colors.dim('custom fixpack config not found, using default config'))
       }
@@ -106,20 +84,26 @@ yargs(hideBin(process.argv))
         array: false
       })
       .option('range', getVersionRangeOption())
+      .option('check-only', checkOnlyOptions)
       .option('npm', npmClientOptions)
       .version(false)
       .help(),
     async (argv) => {
-      const repoConfig = await getConfig()
+      const repoConfig = await getCliConfig()
       console.log('[lerna-ci] try to sync local package versions')
       const source = argv.source || repoConfig.synclocal?.source || 'all'
       const versionRange = argv.range || repoConfig.synclocal?.versionRange
-      const options = { versionSource: source, versionRangeStrategy: versionRange }
+      const options = {
+        versionSource: source,
+        versionRangeStrategy: versionRange,
+        checkOnly: argv.checkOnly,
+      }
       // @ts-ignore
       const updatedPkgs = await syncLocal(options)
       if (updatedPkgs) {
         console.log('[lerna-ci] the following package.json are updated:\n  ' + 
         updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
+        console.log(JSON.stringify(updatedPkgs, null, 2))
       } else {
         console.log('[lerna-ci] all package.json files\' are up to update, nothing touched')
       }
@@ -140,24 +124,29 @@ yargs(hideBin(process.argv))
       })
       .option('range', getVersionRangeOption())
       .option('npm', npmClientOptions)
+      .option('check-only', checkOnlyOptions)
       .version(false)
       .help(),
     async (argv) => {
-      const repoConfig = await getConfig()
+      const repoConfig = await getCliConfig()
       const syncRemoteConfig = argv.packages?.length ? argv.packages : repoConfig.syncremote
       if (!syncRemoteConfig) {
-        console.log('[lerna-ci] no configuration provided for syncremote, this command has had no effect')
+        logger.warn('[lerna-ci] no configuration provided for syncremote, this command has had no effect')
         return
       }
-      console.log('[lerna-ci] try to sync packages\' dependencies\' versions')
+      logger.info('[lerna-ci] try to sync packages\' dependencies\' versions')
       const options = Array.isArray(syncRemoteConfig)
         ? parsePackageNames(syncRemoteConfig)
-        : { versionMap: syncRemoteConfig}
-    
-      const updatedPkgs = await syncRemote(Object.assign({ versionRangeStrategy: argv.range }, options))
+        : { versionMap: syncRemoteConfig }
+      // @ts-ignore
+      const updatedPkgs = await syncRemote(Object.assign(options, {
+        versionRangeStrategy: argv.range,
+        checkOnly: argv.checkOnly
+      }))
       if (updatedPkgs) {
         console.log('[lerna-ci] the following package.json files\' dependencies are updated:\n  ' + 
         updatedPkgs.map(item => `${item.location.replace(process.cwd(), '.')}/package.json(${item.name})`).join('\n  '))
+        console.log(JSON.stringify(updatedPkgs, null, 2))
       } else {
         console.log('[lerna-ci] all package.json files\' dependencies are up to update, nothing touched')
       }
@@ -199,7 +188,8 @@ yargs(hideBin(process.argv))
       if (result.eligible) {
         logger.success('✨ ready to publish!')
       } else {
-        logger.error('⚠️ unable to publish, due to some issues')
+        logger.error('⚠️  unable to publish, due to some issues')
+        console.log(result.reasons)
       }
     }
   )
