@@ -21,6 +21,7 @@
     "@types/yargs": "^17.0.13",
     "cosmiconfig": "^7.0.1",
     "deploy-toolkit": "^0.1.1",
+    "detect-indent": "^6.0.0",
     "find-packages": "^9.0.10",
     "fixpack": "^4.0.0",
     "picocolors": "^1.0.0",

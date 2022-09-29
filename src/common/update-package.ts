@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import semver from 'semver'
+import detectIndent from 'detect-indent'
 import {
   IVersionMap,
   IPackageDigest,
@@ -115,7 +116,11 @@ export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedC
   })
   if (hasChanged) {
     // write file only not in validation mode
-    if (!checkOnly) fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + trailing)
+    if (!checkOnly) {
+      // keep its original indent
+      const indent = detectIndent(content).indent || 2
+      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, indent) + trailing)
+    }
     return changedCategories
   }
   return false
