@@ -10,7 +10,7 @@ import {
   ISyncDepOptions,
   setConfig,
   logger,
-  SUPPORTED_NPM_CLIENTS,
+  // SUPPORTED_NPM_CLIENTS,
   getRepoNpmClient,
   getIndent,
   RELEASE_TYPES,
