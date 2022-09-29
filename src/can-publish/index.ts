@@ -91,6 +91,7 @@ export interface IGitStatus {
 async function checkGitLocalStatus(checkCommit?: boolean): Promise<IGitStatus> {
   const gitStatus = await runShellCmd('git', ['status', '--porcelain'])
   const messages = gitStatus.trim().split('\n')
+  console.log('messages', messages, messages.length)
   if (!messages.length) return { status: 'clean' }
   if (checkCommit) {
     return {
