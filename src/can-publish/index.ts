@@ -139,6 +139,7 @@ export interface IPkgVersionAvailability {
   available: boolean
   name: string
   version: string
+  location: string
   reasons?: Array<'git' | 'npm'>
 }
 
@@ -146,6 +147,7 @@ async function checkPkgVersionAvailable(meta: IPackageDigest, checkGit: boolean)
   const result: IPkgVersionAvailability = {
     available: true,
     name: meta.name,
+    location: meta.location,
     version: meta.version,
   }
   // no version available

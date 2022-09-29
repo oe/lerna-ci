@@ -96,7 +96,7 @@ function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[
   const scopedPkgNames = allPackageNames.filter(name => scopedNames.some(scope => name.startsWith(scope)))
   logger.info(`[lerna-ci] found ${scopedPkgNames.length} scoped packages with scopes prefix ${scopedNames.join(', ')}`)
   if (scopedPkgNames.length) {
-    logger.info(`    ${scopedPkgNames.join('\n    ')}`)
+    logger.info(`    ${scopedPkgNames.join('  ')}`)
   }
   return normalNames.concat(scopedPkgNames)
 }

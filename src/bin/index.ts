@@ -11,8 +11,16 @@ import {
   setConfig,
   logger,
   SUPPORTED_NPM_CLIENTS,
+  getRepoNpmClient,
+  getIndent,
 } from '../index'
-import { getCliConfig, CLI_NAME, cwd } from './config'
+import { getCliConfig, CLI_NAME } from './config'
+import {
+  printChangedPackages,
+  printGitSyncStatus,
+  printPkgVersionConflicts,
+  printGitStatus,
+} from './pretty-print'
 
 setConfig({ debug: true })
 
@@ -62,7 +70,7 @@ yargs(hideBin(process.argv))
     async () => {
       const repoConfig = await getCliConfig()
       if (!repoConfig.fixpack) {
-        console.log(colors.dim('custom fixpack config not found, using default config'))
+        logger.info('custom fixpack config not found, using default config')
       }
       await fixPackageJson(repoConfig.fixpack)
     }
@@ -87,10 +95,11 @@ yargs(hideBin(process.argv))
       .option('check-only', checkOnlyOptions)
       .option('npm', npmClientOptions)
       .version(false)
-      .help(),
+      .help(false),
     async (argv) => {
+      const cmdName = 'synclocal'
       const repoConfig = await getCliConfig()
-      console.log('[lerna-ci] try to sync local package versions')
+      console.log(`[${CLI_NAME}][${cmdName}] try to sync local package versions`)
       const source = argv.source || repoConfig.synclocal?.source || 'all'
       const versionRange = argv.range || repoConfig.synclocal?.versionRange
       const options = {
@@ -100,12 +109,21 @@ yargs(hideBin(process.argv))
       }
       // @ts-ignore
       const updatedPkgs = await syncLocal(options)
+
       if (updatedPkgs) {
-        console.log('[lerna-ci] the following package.json are updated:\n  ' + 
-        updatedPkgs.map(item => `${item.location.replace(cwd, '.')}/package.json(${item.name})`).join('\n  '))
-        console.log(JSON.stringify(updatedPkgs, null, 2))
+        logger.log(`[${CLI_NAME}][${cmdName}] the following package.json files ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
+        await printChangedPackages(updatedPkgs)
+        if (!argv.checkOnly) {
+          let npmClient = argv.npm || await getRepoNpmClient()
+          npmClient = /^yarn/.test(npmClient) ? 'yarn' : npmClient
+          await logger.log(`[${CLI_NAME}][${cmdName}] you may need run \`${npmClient} install\` to make changes take effect`)
+        } else {
+          logger.error(`[${CLI_NAME}][${cmdName}] local packages' versions are messed`)
+          // throw an error when checking
+          process.exit(1)
+        }
       } else {
-        console.log('[lerna-ci] all package.json files\' are up to update, nothing touched')
+        logger.success(`[${CLI_NAME}][${cmdName}] all packages.json files\' are up to update, nothing touched`)
       }
       console.log('')
     }
@@ -125,16 +143,16 @@ yargs(hideBin(process.argv))
       .option('range', getVersionRangeOption())
       .option('npm', npmClientOptions)
       .option('check-only', checkOnlyOptions)
-      .version(false)
       .help(),
     async (argv) => {
+      const cmdName = 'syncremote'
       const repoConfig = await getCliConfig()
       const syncRemoteConfig = argv.packages?.length ? argv.packages : repoConfig.syncremote
       if (!syncRemoteConfig) {
-        logger.warn('[lerna-ci] no configuration provided for syncremote, this command has had no effect')
+        logger.warn(`[${CLI_NAME}][${cmdName}] no configuration provided for \`${cmdName}\`, this command has had no effect`)
         return
       }
-      logger.info('[lerna-ci] try to sync packages\' dependencies\' versions')
+      logger.info(`[${CLI_NAME}][${cmdName}] try to sync packages\' dependencies\' versions`)
       const options = Array.isArray(syncRemoteConfig)
         ? parsePackageNames(syncRemoteConfig)
         : { versionMap: syncRemoteConfig }
@@ -144,11 +162,19 @@ yargs(hideBin(process.argv))
         checkOnly: argv.checkOnly
       }))
       if (updatedPkgs) {
-        console.log('[lerna-ci] the following package.json files\' dependencies are updated:\n  ' + 
-        updatedPkgs.map(item => `${item.location.replace(process.cwd(), '.')}/package.json(${item.name})`).join('\n  '))
-        console.log(JSON.stringify(updatedPkgs, null, 2))
+        logger.log(`[${CLI_NAME}][${cmdName}] the following package.json files' dependencies ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
+        await printChangedPackages(updatedPkgs)
+        if (!argv.checkOnly) {
+          let npmClient = argv.npm || await getRepoNpmClient()
+          npmClient = /^yarn/.test(npmClient) ? 'yarn' : npmClient
+          await logger.log(`[${CLI_NAME}][${cmdName}] you may need run \`${npmClient} install\` to make changes take effect`)
+        } else {
+          logger.error(`[${CLI_NAME}][${cmdName}] local packages' dependencies is outdated`)
+          // throw an error when checking
+          process.exit(1)
+        }
       } else {
-        console.log('[lerna-ci] all package.json files\' dependencies are up to update, nothing touched')
+        logger.success(`[${CLI_NAME}][${cmdName}] all package.json files\' dependencies are up to update, nothing touched`)
       }
       console.log('')
     }
@@ -179,6 +205,7 @@ yargs(hideBin(process.argv))
       .version(false)
       .help(),
     async (argv) => {
+      const cmdName = 'canpublish'
       const result = await canPublish({
         // @ts-ignore
         publishStrategy: argv.versionType,
@@ -186,10 +213,29 @@ yargs(hideBin(process.argv))
         checkCommit: argv.checkGit
       })
       if (result.eligible) {
-        logger.success('✨ ready to publish!')
+        logger.success(`✨[${CLI_NAME}][${cmdName}] ready to publish!`)
       } else {
-        logger.error('⚠️  unable to publish, due to some issues')
-        console.log(result.reasons)
+        logger.error(`⚠️  [${CLI_NAME}][${cmdName}]unable to publish, due to some issues:`)
+        for (const reason of result.reasons!) {
+          switch (reason.type) {
+            case 'git-not-clean':
+              logger.warn(`${getIndent(1)}local git is not clean:`)
+              await printGitStatus(reason.content, 2)
+              break
+            case 'git-outdated':
+              logger.warn(`${getIndent(1)}local git is outdated:`)
+              await printGitSyncStatus(reason.content, 2)
+              break
+            case 'local-version-outdated':
+              logger.warn(`${getIndent(1)}local project packages' versions are outdated:`)
+              await printChangedPackages(reason.content, 2)
+              break
+            case 'next-version-unavailable':
+              logger.warn(`${getIndent(1)}next release versions of some packages' are occupied:`)
+              await printPkgVersionConflicts(reason.content, 2)
+          }
+        }
+        process.exit(1)
       }
     }
   )

@@ -3,7 +3,8 @@ import path from 'path'
 import {
   getAllPackageDigests,
   IPackageFilterOptions,
-  IPackageDigest
+  IPackageDigest,
+  logger,
 } from '../common'
 import defaultConfig from './config'
 
@@ -23,7 +24,7 @@ export async function fixPackageJson (options: IFixPackOptions = {}): Promise<IP
   const pkgs = await getAllPackageDigests(options.packageFilter)
   const pwd = process.cwd()
   return pkgs.filter((pkg) => {
-    console.log(`\nchecking '${pkg.name}' in ${pkg.location.replace(pwd, '.')}`)
+    logger.info(`\nchecking '${pkg.name}' in ${pkg.location.replace(pwd, '.')}`)
     const changed = fixpack(path.join(pkg.location, 'package.json'), options.config || defaultConfig)
     return changed
   })
