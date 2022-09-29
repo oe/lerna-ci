@@ -1,9 +1,9 @@
 import { runShellCmd } from 'deploy-toolkit'
-import { IGetPkgVersionFromRegistry } from './common'
+import { IGetPkgVersionFromRegistry, getMaxStableVersion } from './common'
 
 export const getPkgVersion: IGetPkgVersionFromRegistry = async (options): Promise<string> => {
   const result = await runShellCmd('yarn',
-    ['info', options.pkgName, options.versionStrategy === 'latest' ? 'version' : 'versions', '--json'])
+    ['info', options.pkgName, options.versionStrategy === 'latest' && !options.version ? 'version' : 'versions', '--json'])
    
   const content =  JSON.parse(result)
   if (content.type !== 'inspect') {
@@ -13,5 +13,5 @@ export const getPkgVersion: IGetPkgVersionFromRegistry = async (options): Promis
   if (options.version) {
     return content.data.includes(options.version) ? options.version : ''
   }
-  return content.data.pop()
+  return getMaxStableVersion(content.data, options.versionStrategy!)
 }

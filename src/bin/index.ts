@@ -13,7 +13,7 @@ import {
   SUPPORTED_NPM_CLIENTS,
   getRepoNpmClient,
   getIndent,
-  PUBLIC_STRATEGY,
+  RELEASE_TYPES,
 } from '../index'
 import { getCliConfig, CLI_NAME } from './config'
 import {
@@ -40,20 +40,20 @@ const getVersionRangeOption = ()  => ({
   }
 })
 
-const npmClientOptions = {
-  alias: 'n',
-  describe: 'current repo preferred npm client',
-  coerce: (v) => {
-    if (!v) return v
-    if (/^yarn(.*)$/.test(v)) {
-      if (RegExp.$1 === '' || RegExp.$1 === '1') return 'yarn'
-      return 'yarn-next'
-    }
-    if (SUPPORTED_NPM_CLIENTS.includes(v)) return v
-    throw new Error(colors.red(`unsupported npm client "${v}"`))
-  },
-  choices: SUPPORTED_NPM_CLIENTS
-}
+// const npmClientOptions = {
+//   alias: 'n',
+//   describe: 'current repo preferred npm client',
+//   coerce: (v) => {
+//     if (!v) return v
+//     if (/^yarn(.*)$/.test(v)) {
+//       if (RegExp.$1 === '' || RegExp.$1 === '1') return 'yarn'
+//       return 'yarn-next'
+//     }
+//     if (SUPPORTED_NPM_CLIENTS.includes(v)) return v
+//     throw new Error(colors.red(`unsupported npm client "${v}"`))
+//   },
+//   choices: SUPPORTED_NPM_CLIENTS
+// }
 
 const checkOnlyOptions: Options = {
   alias: 'c',
@@ -94,7 +94,7 @@ yargs(hideBin(process.argv))
       })
       .option('range', getVersionRangeOption())
       .option('check-only', checkOnlyOptions)
-      .option('npm', npmClientOptions)
+      // .option('npm', npmClientOptions)
       .version(false)
       .help(false),
     async (argv) => {
@@ -115,7 +115,7 @@ yargs(hideBin(process.argv))
         logger.log(`[${CLI_NAME}][${cmdName}] the following package.json files ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
         await printChangedPackages(updatedPkgs)
         if (!argv.checkOnly) {
-          let npmClient = argv.npm || await getRepoNpmClient()
+          let npmClient = await getRepoNpmClient()
           npmClient = /^yarn/.test(npmClient) ? 'yarn' : npmClient
           await logger.log(`[${CLI_NAME}][${cmdName}] you may need run \`${npmClient} install\` to make changes take effect`)
         } else {
@@ -137,12 +137,18 @@ yargs(hideBin(process.argv))
       .usage('$0 syncremote [packages...] [--range <versionRange>]')
       .positional('packages', {
         description: 'packages\' names that need to be synced, support: specified package name, package name ',
-        // demandOption: true,
         type: 'string',
         array: true
       })
+      .example([
+        ['$0 syncremote react react-dom', 'update to latest stable version'],
+        ['$0 syncremote react react-dom -r "~"', 'update to latest stable version with custom version range'],
+        ['$0 syncremote "react@18" "react-dom@18" "webpack@^5.0.0"', 'update to specified versions with ranges'],
+        ['$0 syncremote parcel "@parcel/*"', 'by using *, update all parcel related dependencies'],
+        ['$0 syncremote "parcel@2.7.0" "@parcel/*@2.7.0"', 'by using *, update all parcel related dependencies to specified version'],
+      ])
       .option('range', getVersionRangeOption())
-      .option('npm', npmClientOptions)
+      // .option('npm', npmClientOptions)
       .option('check-only', checkOnlyOptions)
       .help(),
     async (argv) => {
@@ -166,7 +172,7 @@ yargs(hideBin(process.argv))
         logger.log(`[${CLI_NAME}][${cmdName}] the following package.json files' dependencies ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
         await printChangedPackages(updatedPkgs)
         if (!argv.checkOnly) {
-          let npmClient = argv.npm || await getRepoNpmClient()
+          let npmClient = await getRepoNpmClient()
           npmClient = /^yarn/.test(npmClient) ? 'yarn' : npmClient
           await logger.log(`[${CLI_NAME}][${cmdName}] you may need run \`${npmClient} install\` to make changes take effect`)
         } else {
@@ -182,20 +188,14 @@ yargs(hideBin(process.argv))
   )
 
   .command(
-    'canpublish <versionType>',
+    'canpublish [releaseType]',
     'check whether it\'s eligible to publish next version',
     (yargs) => yargs
-      .usage('$0 canpublish <versionType>')
-      .positional('versionType', {
+      .usage('$0 canpublish [releaseType]')
+      .positional('releaseType', {
         description: 'next version type, like major, minor, patch or alpha(for test), default to patch',
         default: 'patch',
-        choices: PUBLIC_STRATEGY,
-      })
-      .options('no-private', {
-        alias: 'n',
-        default: true,
-        describe: 'set it true to skip checking private packages, default true',
-        type: 'boolean',
+        choices: RELEASE_TYPES,
       })
       .options('check-git', {
         alias: 'g',
@@ -209,8 +209,7 @@ yargs(hideBin(process.argv))
       const cmdName = 'canpublish'
       const result = await canPublish({
         // @ts-ignore
-        publishStrategy: argv.versionType,
-        noPrivate: argv.noPrivate,
+        releaseType: argv.releaseType,
         checkCommit: argv.checkGit
       })
       if (result.eligible) {

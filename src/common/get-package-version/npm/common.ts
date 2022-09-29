@@ -1,3 +1,4 @@
+import semver from 'semver'
 import { IVersionPickStrategy } from '../../types'
 
 export interface IGetPkgVersionFromRegistryOptions {
@@ -13,3 +14,15 @@ export interface IGetPkgVersionFromRegistryOptions {
 }
 
 export type IGetPkgVersionFromRegistry = (options: IGetPkgVersionFromRegistryOptions) => Promise<string>
+
+/**
+ * get the max stable version
+ * @param versions version list, should be sorted from smallest to largest
+ */
+export function getMaxStableVersion(versions: string[], strategy: IVersionPickStrategy): string {
+  if (strategy === 'max') return versions.pop()!
+  return versions.reverse().find(v => {
+    const sv = semver.parse(v)
+    return sv && !sv.prerelease.length
+  }) || versions.pop()!
+}

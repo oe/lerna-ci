@@ -4,6 +4,7 @@ import { runShellCmd } from 'deploy-toolkit'
 import { IGetPkgVersionFromRegistryOptions } from './common'
 import { getProjectRoot, readRootPkgJson } from '../../utils'
 import { IVersionPickStrategy, IVersionMap } from '../../types'
+import { logger } from '../../logger'
 import * as npm from './npm'
 import * as yarn from './yarn'
 import * as yarnNext from './yarn-next'
@@ -45,13 +46,19 @@ export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: I
 }
 
 export async function getPkgVersionFormRegistry(
-  options: IGetPkgVersionFromRegistryOptions & {npmClient?: INpmClient }): Promise<string> {
+  options: IGetPkgVersionFromRegistryOptions & {npmClient?: INpmClient }): Promise<string | undefined> {
   const npmClient = options.npmClient || await getRepoNpmClient()
   const client = processors[npmClient]
   if (!client) {
     throw new Error('unsupported npm client: ' + npmClient)
   }
-  return client.getPkgVersion(options)
+  try {
+    const version = await client.getPkgVersion(options)
+    return version
+  } catch (error) {
+    logger.warn(`[lerna-ci] unable to get version of ${options.pkgName} from registry`)
+    return
+  }
 }
 
 

@@ -27,11 +27,11 @@ export interface ISyncDepOptions {
   versionMap?: IVersionMap
   /**
    * npm version strategy
-   *  default to 'latest'
+   *  default to 'max-stable'
    */
-  versionStrategy?: IVersionPickStrategy
+  versionPickStrategy?: IVersionPickStrategy
   /**
-   * version range strategy, use ^ by default
+   * version range strategy, use retain by default
    */
   versionRangeStrategy?: IVersionRangeStrategy
   /** only check, with package.json files untouched */
@@ -40,7 +40,8 @@ export interface ISyncDepOptions {
 
 const DEFAULT_OPTIONS: ISyncDepOptions = {
   versionMap: {},
-  versionRangeStrategy: '^'
+  versionRangeStrategy: 'retain',
+  versionPickStrategy: 'max-stable'
 }
 
 /**
@@ -57,7 +58,7 @@ export async function syncRemote(syncOptions: ISyncDepOptions): Promise<IChanged
     const pkgsHasVersion = Object.keys(versionMap)
     const pkgsWithoutVersion = packageNames.filter(n => pkgsHasVersion.indexOf(n) === -1)
     if (pkgsWithoutVersion.length) {
-      const versionFromNpm = await getVersionsFromNpm(pkgsWithoutVersion, options.versionStrategy)
+      const versionFromNpm = await getVersionsFromNpm(pkgsWithoutVersion, options.versionPickStrategy)
       // add version range to versionFromNpm 
       versionMap = Object.assign({}, versionFromNpm, versionMap)
     }

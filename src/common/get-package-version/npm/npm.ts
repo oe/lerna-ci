@@ -1,5 +1,5 @@
 import { runShellCmd } from 'deploy-toolkit'
-import { IGetPkgVersionFromRegistry } from './common'
+import { IGetPkgVersionFromRegistry, getMaxStableVersion } from './common'
 
 /**
  * get package version
@@ -10,12 +10,12 @@ import { IGetPkgVersionFromRegistry } from './common'
  */
 export const getPkgVersion: IGetPkgVersionFromRegistry = async (options): Promise<string> => {
   const result = await runShellCmd('npm',
-    ['info', options.pkgName, options.versionStrategy === 'latest' ? 'version' : 'versions', '--json'])
+    ['info', options.pkgName, options.versionStrategy === 'latest' && !options.version ? 'version' : 'versions', '--json'])
    
   const content =  JSON.parse(result)
   if (options.versionStrategy === 'latest') return content
   if (options.version) {
     return content.includes(options.version) ? options.version : ''
   }
-  return content.pop()
+  return getMaxStableVersion(content, options.versionStrategy!)
 }

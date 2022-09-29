@@ -37,9 +37,10 @@ export type IVersionMap =  IObject<string>
 /**
  * npm version strategy
  *  max: max package version
+ *  max-stable: max stable package version
  *  latest: latest release package version
  */
-export type IVersionPickStrategy = 'max' | 'latest'
+export type IVersionPickStrategy = 'max' | 'latest' | 'max-stable'
 
 /**
  * custom version transform
@@ -60,12 +61,12 @@ export type IVersionRangeStrategy = IUpgradeVersionStrategy | '<' | '<='
  * all public strategy
  *  alpha is alias for prerelease
  */
-export const PUBLIC_STRATEGY = <const>['major', 'minor', 'patch', 'prerelease', 'prepatch', 'preminor', 'premajor', 'alpha']
+export const RELEASE_TYPES = <const>['major', 'minor', 'patch', 'prerelease', 'prepatch', 'preminor', 'premajor', 'alpha']
 
 /**
  * alpha for prerelease
  */
-export type IVersionPublishStrategy = typeof PUBLIC_STRATEGY[number]
+export type IReleaseType = typeof RELEASE_TYPES[number]
 
 
 /**

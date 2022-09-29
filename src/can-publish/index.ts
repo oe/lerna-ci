@@ -3,7 +3,7 @@ import { runShellCmd } from 'deploy-toolkit'
 import {
   getAllPackageDigests,
   EVerSource,
-  IVersionPublishStrategy,
+  IReleaseType,
   getGitRoot,
   IPackageDigest,
   syncPruneGitTags,
@@ -14,8 +14,7 @@ import {
 import { syncLocal } from '../sync-local'
 
 export interface ICanPushOptions {
-  publishStrategy: IVersionPublishStrategy
-  noPrivate: boolean
+  releaseType: IReleaseType
   checkCommit?: boolean
 }
 
@@ -55,7 +54,7 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
     logger.warn('current project not in a git repo')
   }
 
-  if (options.publishStrategy !== 'alpha') {
+  if (options.releaseType !== 'alpha') {
     const result = await syncLocal({
       versionRangeStrategy: 'retain',
       versionSource: EVerSource.ALL,
@@ -72,7 +71,7 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
       await syncPruneGitTags()
     }
     // check alpha version
-    const versionAvailable = await checkNextVersionIsAvailable(options.publishStrategy, !!gitRoot)
+    const versionAvailable = await checkNextVersionIsAvailable(options.releaseType, !!gitRoot)
     if (versionAvailable !== true) {
       reasons.push({
         type: 'next-version-unavailable',
@@ -128,7 +127,7 @@ async function checkGitSyncStatus(): Promise<IGitSyncStatus> {
   }
 }
 
-async function checkNextVersionIsAvailable(publishStrategy: IVersionPublishStrategy, checkGit: boolean) {
+async function checkNextVersionIsAvailable(publishStrategy: IReleaseType, checkGit: boolean) {
   const pkgs = await getAllPackageDigests()
   const metas = pkgs.map(pkg => Object.assign({}, pkg, {
     version: pkg.version && getNextVersion(pkg.name, pkg.version, publishStrategy),
@@ -174,9 +173,9 @@ async function checkPkgVersionAvailable(meta: IPackageDigest, checkGit: boolean)
   return result
 }
 
-function getNextVersion(pkgName: string, version: string, publishStrategy: IVersionPublishStrategy) {
+function getNextVersion(pkgName: string, version: string, releaseType: IReleaseType) {
   if (!version) return version
-  const strategy = publishStrategy === 'alpha' ? 'prerelease' : publishStrategy
+  const strategy = releaseType === 'alpha' ? 'prerelease' : releaseType
   const identifier = /^pre/.test(strategy) ? 'alpha' : undefined
   const ver = semver.inc(version, strategy, identifier)
   if (ver === null) {
