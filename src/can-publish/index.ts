@@ -176,14 +176,11 @@ async function checkPkgVersionAvailable(meta: IPackageDigest, checkGit: boolean)
 
 function getNextVersion(pkgName: string, version: string, publishStrategy: IVersionPublishStrategy) {
   if (!version) return version
-  let ver: string | null
-  if (publishStrategy === 'alpha') {
-    ver =semver.inc(version, 'prerelease', 'alpha')
-  } else {
-    ver = semver.inc(version, publishStrategy)
-  }
+  const strategy = publishStrategy === 'alpha' ? 'prerelease' : publishStrategy
+  const identifier = /^pre/.test(strategy) ? 'alpha' : undefined
+  const ver = semver.inc(version, strategy, identifier)
   if (ver === null) {
-    throw new Error(`package ${pkgName}'s version ${version} is invalid`)
+    throw new Error(`package ${pkgName}'s version ${version} is invalid, unable to get its next version`)
   }
   return ver
 }

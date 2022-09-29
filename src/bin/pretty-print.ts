@@ -56,7 +56,7 @@ export async function printPkgVersionConflicts(infos: IPkgVersionAvailability[],
       if (reason === 'git') {
         return `git tag ${item.name}@${item.version} is existing`
       }
-      return `npm version ${item.version} for ${item.name}@ is existing on registry`
+      return `npm version ${item.version} for ${item.name} is existing on registry`
     })
   }))
 

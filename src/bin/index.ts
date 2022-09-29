@@ -13,6 +13,7 @@ import {
   SUPPORTED_NPM_CLIENTS,
   getRepoNpmClient,
   getIndent,
+  PUBLIC_STRATEGY,
 } from '../index'
 import { getCliConfig, CLI_NAME } from './config'
 import {
@@ -188,7 +189,7 @@ yargs(hideBin(process.argv))
       .positional('versionType', {
         description: 'next version type, like major, minor, patch or alpha(for test), default to patch',
         default: 'patch',
-        choices: ['major', 'minor', 'patch', 'alpha']
+        choices: PUBLIC_STRATEGY,
       })
       .options('no-private', {
         alias: 'n',

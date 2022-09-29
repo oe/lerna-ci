@@ -57,9 +57,15 @@ export type IUpgradeVersionStrategy = '>' | '~' | '^' | '>=' | '' | 'retain' | I
 export type IVersionRangeStrategy = IUpgradeVersionStrategy | '<' | '<='
 
 /**
+ * all public strategy
+ *  alpha is alias for prerelease
+ */
+export const PUBLIC_STRATEGY = <const>['major', 'minor', 'patch', 'prerelease', 'prepatch', 'preminor', 'premajor', 'alpha']
+
+/**
  * alpha for prerelease
  */
-export type IVersionPublishStrategy = 'major' | 'minor' | 'patch' | 'alpha'
+export type IVersionPublishStrategy = typeof PUBLIC_STRATEGY[number]
 
 
 /**
