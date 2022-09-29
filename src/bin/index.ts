@@ -213,9 +213,10 @@ yargs(hideBin(process.argv))
         checkCommit: argv.checkGit
       })
       if (result.eligible) {
-        logger.success(`✨[${CLI_NAME}][${cmdName}] ready to publish!`)
+        logger.success(`✨  [${CLI_NAME}][${cmdName}] ready to publish!`)
+        console.log('')
       } else {
-        logger.error(`⚠️  [${CLI_NAME}][${cmdName}]unable to publish, due to some issues:`)
+        logger.error(`⚠️  [${CLI_NAME}][${cmdName}] unable to publish, due to some issues:`)
         for (const reason of result.reasons!) {
           switch (reason.type) {
             case 'git-not-clean':
