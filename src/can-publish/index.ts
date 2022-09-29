@@ -89,10 +89,10 @@ export interface IGitStatus {
 }
 
 async function checkGitLocalStatus(checkCommit?: boolean): Promise<IGitStatus> {
-  const gitStatus = await runShellCmd('git', ['status', '--porcelain'])
-  const messages = gitStatus.trim().split('\n')
-  console.log('messages', messages, messages.length)
-  if (!messages.length) return { status: 'clean' }
+  let gitStatus = await runShellCmd('git', ['status', '--porcelain'])
+  gitStatus = gitStatus.trim()
+  if (!gitStatus) return { status: 'clean' }
+  const messages = gitStatus.split('\n').map(l => l.trim())
   if (checkCommit) {
     return {
       status: 'uncommitted',
@@ -117,9 +117,11 @@ export interface IGitSyncStatus {
 
 async function checkGitSyncStatus(): Promise<IGitSyncStatus> {
   const result = await runShellCmd('git', ['status', '-uno'])
-  if (result.includes('is up to date with')) return { isUp2dated: true }
-  const lines = result.trim().split('\n').slice(0, 2)
-  const message = lines[1].replace('Your branch', lines[0].replace('On branch ', ''))
+  // "ahead of remote" is ok, publish won't be blocked
+  if (result.includes('is up to date with') || result.includes('is ahead of')) return { isUp2dated: true }
+  const message = result.replace('Your branch', '')
+    .replace('On branch ', '')
+    .replace(/[\n\r]/g, ' ')
   return {
     isUp2dated: false,
     message,

@@ -223,7 +223,7 @@ yargs(hideBin(process.argv))
               await printGitStatus(reason.content, 2)
               break
             case 'git-outdated':
-              logger.warn(`${getIndent(1)}local git is outdated:`)
+              logger.warn(`${getIndent(1)}local git is not sync with remote origin:`)
               await printGitSyncStatus(reason.content, 2)
               break
             case 'local-version-outdated':
