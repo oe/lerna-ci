@@ -54,7 +54,8 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
     logger.warn('current project not in a git repo')
   }
 
-  if (options.releaseType !== 'alpha') {
+  // none test version
+  if (options.releaseType !== 'alpha' && !/^pre/.test(options.releaseType)) {
     const result = await syncLocal({
       versionRangeStrategy: 'retain',
       versionSource: EVerSource.ALL,
