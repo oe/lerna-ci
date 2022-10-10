@@ -55,8 +55,8 @@ export async function getPkgVersionFormRegistry(
   try {
     const version = await client.getPkgVersion(options)
     return version
-  } catch (error) {
-    logger.warn(`[lerna-ci] unable to get version of ${options.pkgName} from registry`)
+  } catch (error: any) {
+    logger.warn(`[lerna-ci] unable to get version of ${options.pkgName} from registry`, error.message)
     return
   }
 }
