@@ -14,8 +14,20 @@ import {
 import { syncLocal } from '../sync-local'
 
 export interface ICanPushOptions {
+  /**
+   * version release type
+   */
   releaseType: IReleaseType
+  /**
+   * check local git has uncommitted changes
+   */
   checkCommit?: boolean
+  /**
+   * whether use max version to release
+   *  if set true, it will try sync all local packages' versions to the maximal,
+   *    if any package is not up to date, check failed
+   */
+  useMaxVersion?: boolean
 }
 
 export type IFailPublishReason = { type: 'git-not-clean'; content: IGitStatus }
@@ -54,8 +66,8 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
     logger.warn('current project not in a git repo')
   }
 
-  // none test version
-  if (options.releaseType !== 'alpha' && !/^pre/.test(options.releaseType)) {
+  // check whether local are using the maximal versions
+  if (options.useMaxVersion) {
     const result = await syncLocal({
       versionRangeStrategy: 'retain',
       versionSource: EVerSource.ALL,
@@ -67,18 +79,17 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
         content: result
       })
     }
-  } else {
-    if (gitRoot) {
-      await syncPruneGitTags()
-    }
-    // check alpha version
-    const versionAvailable = await checkNextVersionIsAvailable(options.releaseType, !!gitRoot)
-    if (versionAvailable !== true) {
-      reasons.push({
-        type: 'next-version-unavailable',
-        content: versionAvailable
-      })
-    }
+  }
+  if (gitRoot) {
+    await syncPruneGitTags()
+  }
+  // check alpha version
+  const versionAvailable = await checkNextVersionIsAvailable(options.releaseType, !!gitRoot)
+  if (versionAvailable !== true) {
+    reasons.push({
+      type: 'next-version-unavailable',
+      content: versionAvailable
+    })
   }
   return reasons.length ? { eligible: false, reasons } : { eligible: true }
 }

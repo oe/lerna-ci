@@ -203,6 +203,11 @@ yargs(hideBin(process.argv))
         describe: 'check whether git is committed, default true',
         type: 'boolean',
       })
+      .options('use-max-version', {
+        alias: 'm',
+        describe: 'check whether local packages are using the maximal versions',
+        type: 'boolean',
+      })
       .version(false)
       .help(),
     async (argv) => {
@@ -210,7 +215,8 @@ yargs(hideBin(process.argv))
       const result = await canPublish({
         // @ts-ignore
         releaseType: argv.releaseType,
-        checkCommit: argv.checkGit
+        checkCommit: argv.checkGit,
+        useMaxVersion: argv.useMaxVersion
       })
       if (result.eligible) {
         logger.success(`✨  [${CLI_NAME}][${cmdName}] ready to publish!`)
