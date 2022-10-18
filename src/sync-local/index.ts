@@ -39,6 +39,10 @@ export interface ISyncPackageOptions {
    * validate package whether need to update, don't change package.json file actually
    */
   checkOnly?: boolean
+  /**
+   * check whether packages' versions are exactly same
+   */
+  exact?: boolean
 }
 
 const DEFAULT_OPTIONS: ISyncPackageOptions = {
@@ -65,7 +69,8 @@ export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<
       latestVersions,
       versionTransform: getVersionTransformer(options.versionRangeStrategy),
       checkOnly: options.checkOnly,
-      pkgVersion: latestVersions[item.name]
+      pkgVersion: latestVersions[item.name],
+      exact: options.exact
     })
     return changes && Object.assign({}, item, { changes })
   }).filter(Boolean)

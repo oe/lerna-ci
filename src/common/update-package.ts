@@ -68,6 +68,11 @@ export interface IUpdatePackageJSONOptions {
    * current pkg's latest version, without range indicator(aka, >, ^, ~, etc)
    */
   pkgVersion?: string
+  /**
+   * whether make version are exactly same
+   *  if set to false, check existing version range with semver, no change if matches
+   */
+  exact?: boolean
 }
 
 /**
@@ -105,7 +110,12 @@ export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedC
     }
   }
   PKG_DEP_KEYS.forEach(key => {
-    const changes = updateDepsVersion(pkg[key], latestVersions, versionTransform)
+    const changes = updateDepsVersion({
+      dependencies: pkg[key],
+      versions: latestVersions,
+      versionTransform,
+      exact: options.exact
+    })
     if (changes) {
       changedCategories.push({
         field: key,
@@ -127,25 +137,47 @@ export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedC
 }
 
 
+interface IUpdateDepsVersionOptions {
+  /**
+   * original deps object
+   */
+  dependencies: IVersionMap
+  /**
+   * latest versions map, without range indicator(aka, >, ^, ~, etc)
+   */
+  versions: IVersionMap
+  /**
+   * package dependencies' version transformer
+   */
+  versionTransform: IVerTransform
+  /**
+   * whether make version are exactly same with `versions`
+   *  even set to true, versionTransform will be applied
+   */
+  exact?: boolean
+}
 
 /**
  * update deps versions, return true if any pkg's version updated
  * @param deps original deps object
  * @param versions latest package versions
  */
-export function updateDepsVersion(deps: IVersionMap, versions: IVersionMap, versionTransform: IVerTransform): IChangedPkg[] | false {
+function updateDepsVersion({ dependencies, versions, versionTransform, exact }:  IUpdateDepsVersionOptions): IChangedPkg[] | false {
   let hasChanged = false
-  if (!deps) return hasChanged
+  if (!dependencies) return hasChanged
   const changed: IChangedPkg[] = []
-  Object.keys(deps).forEach(name => {
-    const ver = getVersion(name, versions, deps[name], versionTransform)
-    if (ver && deps[name] !== ver) {
+  Object.keys(dependencies).forEach(name => {
+    const ver = getVersion(name, versions)
+    if (!ver) return
+    if (!exact && semver.satisfies(dependencies[name], versions[name])) return
+    const version = versionTransform(name, dependencies[name], ver)
+    if (dependencies[name] !== version) {
       changed.push({
         name,
-        oldVersion: deps[name],
-        newVersion: ver,
+        oldVersion: dependencies[name],
+        newVersion: version,
       })
-      deps[name] = ver
+      dependencies[name] = version
       hasChanged = true
     }
   })
@@ -164,15 +196,16 @@ export function updateDepsVersion(deps: IVersionMap, versions: IVersionMap, vers
  * @param name package name
  * @returns matched version if found
  */
-function getVersion(name: string, versionMap: IVersionMap, oldVersion: string, versionTransform: IVerTransform) {
-  if(versionMap[name]) return versionTransform(name, oldVersion, versionMap[name])
+function getVersion(name: string, versionMap: IVersionMap) {
+
+  if(versionMap[name]) return versionMap[name]
   const key = Object.keys(versionMap).filter(k => {
     const prefix = getScopedPrefix(k)
     if (!prefix) return false
     return name.startsWith(prefix)
     // get the most closed version prefix
   }).sort((a, b) => b.length - a.length).shift()
-  if (key) return versionTransform(name, oldVersion, versionMap[key])
+  if (key) return versionMap[key]
   return
 }
 

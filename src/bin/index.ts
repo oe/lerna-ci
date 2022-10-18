@@ -94,19 +94,29 @@ yargs(hideBin(process.argv))
       })
       .option('range', getVersionRangeOption())
       .option('check-only', checkOnlyOptions)
-      // .option('npm', npmClientOptions)
+      .option('exact', {
+        describe: 'use exact version with custom version `range` options(^, ~, >=, >, =, no punctuation)',
+        alias: 'e',
+        type: 'boolean',
+        default: true,
+      })
       .version(false)
       .help(false),
     async (argv) => {
       const cmdName = 'synclocal'
       const repoConfig = await getCliConfig()
-      console.log(`[${CLI_NAME}][${cmdName}] try to sync local package versions`)
+      const cliMessage = argv.checkOnly
+        ? 'try to check local packages\' versions whether are synced'
+        : 'try to sync local packages\' versions'
+
+      console.log(`[${CLI_NAME}][${cmdName}] ${cliMessage}`)
       const source = argv.source || repoConfig.synclocal?.source || 'all'
       const versionRange = argv.range || repoConfig.synclocal?.versionRange
       const options = {
         versionSource: source,
         versionRangeStrategy: versionRange,
         checkOnly: argv.checkOnly,
+        exact: argv.exact,
       }
       // @ts-ignore
       const updatedPkgs = await syncLocal(options)
@@ -124,7 +134,7 @@ yargs(hideBin(process.argv))
           process.exit(1)
         }
       } else {
-        logger.success(`[${CLI_NAME}][${cmdName}] all packages.json files\' are up to update, nothing touched`)
+        logger.success(`[${CLI_NAME}][${cmdName}] all packages.json files\' are up to update${argv.checkOnly ? '': ', nothing touched'}`)
       }
       console.log('')
     }

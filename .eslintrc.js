@@ -35,4 +35,5 @@ module.exports = {
     ecmaVersion: 6,
     sourceType: 'module'
   },
+  ignorePatterns: ['node_modules', 'dist', 'lib', 'coverage', 'build']
 }

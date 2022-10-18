@@ -59,7 +59,7 @@ async function getPackagesViaYarnNext(rootPath: string): Promise<IPackageDigest[
   })
   
   try {
-    const pkgs = content.split('\n')
+    const pkgs = content.trim().split('\n')
       .map(line => JSON.parse(line))
       // ignore the root
       .filter(pkg => pkg.location !== '.')
