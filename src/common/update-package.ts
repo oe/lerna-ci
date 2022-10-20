@@ -197,21 +197,34 @@ function updateDepsVersion({ dependencies, versions, versionTransform, exact }: 
  * @returns matched version if found
  */
 function getVersion(name: string, versionMap: IVersionMap) {
-
   if(versionMap[name]) return versionMap[name]
   const key = Object.keys(versionMap).filter(k => {
-    const prefix = getScopedPrefix(k)
-    if (!prefix) return false
-    return name.startsWith(prefix)
+    if (!isAsteriskPkgName(k)) return false
+    return isPkgNameMatchingPattern(name, k)
     // get the most closed version prefix
   }).sort((a, b) => b.length - a.length).shift()
   if (key) return versionMap[key]
   return
 }
 
-// match @scope/*
-const SCOPED_PKG_REGEX = /^(@[^/]+\/[^*]*)\*$/
+export function isAsteriskPkgName(name: string) {
+  // empty or only have asterisk
+  if (!name || /^\**$/.test(name)) {
+    throw new Error(`invalid package name pattern \`${name}\``)
+  }
+  return name.includes('*')
+}
 
-export function getScopedPrefix(packageName: string) {
-  return SCOPED_PKG_REGEX.test(packageName) && RegExp.$1
+export function isPkgNameMatchingPattern(pkgName: string, pattern: string) {
+  const reg = convertAsterisk2Reg(pattern)
+  return reg.test(pkgName)
+}
+
+// escape string for regex
+function convertAsterisk2Reg(str: string) {
+  const regStr = str
+    .replace(/\*+/, '*')
+    .replace(/([.+^$(){}|[\]\\])/g, '\\$1')
+    .replace(/\*/g, '.*')
+  return new RegExp(`^${regStr}$`)
 }

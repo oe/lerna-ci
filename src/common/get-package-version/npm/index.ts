@@ -30,7 +30,7 @@ export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: I
     throw new Error('unsupported npm client: ' + client)
   }
   while (pkgNames.length) {
-    const items = pkgNames.splice(-10)
+    const items = pkgNames.splice(-6)
     const vers = await Promise.all(items.map(name => getPkgVersionFormRegistry({
       pkgName: name,
       versionStrategy: versionStrategy || 'max',

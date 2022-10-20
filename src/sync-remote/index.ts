@@ -5,7 +5,8 @@ import {
   IVersionPickStrategy,
   updatePackageJSON,
   IVersionRangeStrategy,
-  getScopedPrefix,
+  isAsteriskPkgName,
+  isPkgNameMatchingPattern,
   IPackageDigest,
   IVersionMap,
   getAllDependencies,
@@ -53,7 +54,7 @@ export async function syncRemote(syncOptions: ISyncDepOptions): Promise<IChanged
   const allPkgDigests = await getAllPackageDigests()
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   let versionMap = options.versionMap!
-  if (options.packageNames) {
+  if (Array.isArray(options.packageNames) && options.packageNames.length) {
     const packageNames = flatPackageNames(options.packageNames, allPkgDigests)
     const pkgsHasVersion = Object.keys(versionMap)
     const pkgsWithoutVersion = packageNames.filter(n => pkgsHasVersion.indexOf(n) === -1)
@@ -62,6 +63,10 @@ export async function syncRemote(syncOptions: ISyncDepOptions): Promise<IChanged
       // add version range to versionFromNpm 
       versionMap = Object.assign({}, versionFromNpm, versionMap)
     }
+  }
+  if (!versionMap || !Object.keys(versionMap).length) {
+    logger.warn('[lerna-ci] no package names provided, nothing touched')
+    return false
   }
   const pkgsUpdated = allPkgDigests.map(item => {
     const changes = updatePackageJSON({
@@ -85,17 +90,16 @@ function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[
   const scopedNames:string[] = []
   const normalNames:string[] = []
   packageNames.forEach(name => {
-    const prefix = getScopedPrefix(name)
-    if (prefix) {
-      scopedNames.push(prefix)
+    if (isAsteriskPkgName(name)) {
+      scopedNames.push(name)
     } else {
       normalNames.push(name)
     }
   })
   if (!scopedNames.length) return packageNames
   const allPackageNames = getAllDependencies(allPkgDigests)
-  const scopedPkgNames = allPackageNames.filter(name => scopedNames.some(scope => name.startsWith(scope)))
-  logger.info(`[lerna-ci] found ${scopedPkgNames.length} scoped packages with scopes prefix ${scopedNames.join(', ')}`)
+  const scopedPkgNames = allPackageNames.filter(name => scopedNames.some(scope => isPkgNameMatchingPattern(name, scope)))
+  logger.info(`[lerna-ci] found ${scopedPkgNames.length} scoped packages with patterns ${scopedNames.join(', ')}`)
   if (scopedPkgNames.length) {
     logger.info(`    ${scopedPkgNames.join('  ')}`)
   }
