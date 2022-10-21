@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/npm/dm/lerna-ci.svg" alt="npm downloads" height="20">
   </a>
 </div>
-<h4 align="center">The essential toolkit for monorepo managed by <a href="https://lerna.js.org/">lerna</a></h4>
+<h4 align="center">The essential toolkit for monorepo managed by <a href="https://lerna.js.org/">lerna/npm/yarn/pnpm/turbo</a></h4>
 
 - [Features](#features)
 - [Install](#install)
@@ -43,9 +43,11 @@
 * sync versions of packages in monorepo (with cli command)
 * sync dependencies versions of all packages (with cli command)
 * format all package.json files (with cli command)
+* check if all packages are qualified to publish to npm (with cli command)
 * get all packages' meta info
-* get all changed packages' meta info
 * some other useful utilities
+
+**`lerna-ci` is designed for monorepo, but it can also be used in standard repo.**
 
 ## Install
 ```sh
@@ -107,6 +109,14 @@ npx lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scop
 ```
 
 You may need to run `yarn` or `npm install` to update lockfile.
+
+### canpublish
+check if all packages are qualified to publish to npm, using [getChangedPackages](#getchangedpackages) under the hood
+
+```sh
+yarn lerna-ci canpublish <versionStrategy>
+
+```
 
 ### fixpack
 format all packages' package.json, using [fixPackageJson](#fixpackagejson) under the hood

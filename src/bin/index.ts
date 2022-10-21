@@ -155,7 +155,8 @@ yargs(hideBin(process.argv))
         ['$0 syncremote react react-dom -r "~"', 'update to latest stable version with custom version range'],
         ['$0 syncremote "react@18" "react-dom@18" "webpack@^5.0.0"', 'update to specified versions with ranges'],
         ['$0 syncremote parcel "@parcel/*"', 'by using *, update all parcel related dependencies'],
-        ['$0 syncremote "parcel@2.7.0" "@parcel/*@2.7.0"', 'by using *, update all parcel related dependencies to specified version'],
+        ['$0 syncremote "*plugin*"', 'update all packages that name contains `plugin`'],
+        ['$0 syncremote "parcel@2.7.0" "@parcel/*@2.7.0"', 'update all parcel related dependencies to specified version'],
       ])
       .option('range', getVersionRangeOption())
       // .option('npm', npmClientOptions)
