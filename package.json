@@ -43,6 +43,9 @@
   "keywords": [
     "ci/cd",
     "lerna",
+    "yarn",
+    "pnpm",
+    "npm",
     "lerna-ci",
     "monorepo",
     "toolkit"

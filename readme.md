@@ -16,13 +16,20 @@
 </div>
 <h4 align="center">The essential toolkit for monorepo managed by <a href="https://lerna.js.org/">lerna/npm/yarn/pnpm/turbo</a></h4>
 
+
 - [Features](#features)
 - [Install](#install)
+- [Usage](#usage)
+- [Cli commands](#cli-commands)
+  - [synclocal](#synclocal)
+  - [syncremote](#syncremote)
+  - [canpublish](#canpublish)
+  - [fixpack](#fixpack)
 - [API](#api)
+  - [getAllPackageDigests](#getallpackagedigests)
   - [syncPackageVersions](#syncpackageversions)
   - [syncPackageDependenceVersion](#syncpackagedependenceversion)
   - [fixPackageJson](#fixpackagejson)
-  - [getAllPackageDigests](#getallpackagedigests)
   - [getChangedPackages](#getchangedpackages)
   - [getRepoNpmClient](#getreponpmclient)
   - [addRange2VersionMap](#addrange2versionmap)
@@ -32,10 +39,6 @@
   - [isLernaAvailable](#islernaavailable)
   - [maxVersion](#maxversion)
   - [pickOne](#pickone)
-- [Cli commands](#cli-commands)
-  - [synclocal](#synclocal)
-  - [syncremote](#syncremote)
-  - [fixpack](#fixpack)
 - [Configuration file](#configuration-file)
 - [Breaking changes](#breaking-changes)
 
@@ -58,6 +61,8 @@ yarn add lerna-ci -D
 npm install lerna-ci -D
 ```
 you may also install it to global if you use cli commands frequently(not recommended)
+
+Notice: **lerna-ci requires node `>=14.6`**
 
 ## Usage
 
@@ -82,40 +87,66 @@ sync versions of packages in monorepo, using [syncPackageVersions](#syncpackagev
 
 ```sh
 # with yarn
-yarn lerna-ci synclocal [version source]
+yarn lerna-ci synclocal [source] [--check-only]
 
 # version source, determine where to get the packages' versions, could be: 
-#   git, npm, local, or all, default to local
+#   git, npm, local, or all, default all
+# if check-only is true, it will only check if packages' versions are synced, exit 1 if not synced
 
 # or if you prefer npm
-npx lerna-ci synclocal [version source]
+npx lerna-ci synclocal [source] [--check-only]
+
+# check for more options and examples
+yarn lerna-ci synclocal --help
 ```
 
 It's very useful when local packages versions are messed up, such as:
-1. publish a beta version inside a package without using lerna
-2. partial success when publish packages with lerna (you may use `yarn lerna-ci synclocal all` to fix it)
+1. you have a monorepo with 2 packages, `a` and `b`, and `b` depends on `a`
+2. `a` has published a new version `1.0.2`, but `a`'s version in `b` is still `0.3.0`
 
-You may need to run `yarn` or `npm install` to update lockfile.
+this may lead to some unexpected errors, it can happens in some cases:
+1. publish a beta version inside a package without using lerna(or other monorepo tools)
+2. partial success when publish packages with lerna(or other monorepo tools), you may use `yarn lerna-ci synclocal all` to fix it
 
-### syncremote
+You may need to run `yarn` or `npm install` to make your changes take effect.
+
+### syncdeps
 sync all packages' dependencies versions in monorepo, using [syncPackageDependenceVersion](#syncpackagedependenceversion) under the hood
 
 ```sh
-# with yarn, must use quotes when specify scoped wildcard package name
-yarn lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/xxx*"> <"@scopedName2/*"> ... <"@scopedNameN/*"> 
+# with yarn
+yarn lerna-ci syncdeps <packageNames...> [--check-only]
+# packageNames could be a list of package names, or a list of package name with version range, such as: 
+#     "@babel/*" "@babel/core@^7.0.0" "parcel@^2.0.0" "rollup-plugin*"
+#     package name with asterisk(*) must be quoted
+# if check-only is true, it will check if any package's dependencies need be synced, exit 1 if found
 
 # or if you prefer npm, must use quotes when specify scoped wildcard package name
-npx lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/xxx*"> <"@scopedName2/*"> ... <"@scopedNameN/*">
+npx lerna-ci syncdeps <packageNames...> [--check-only]
+
+# check for more options and examples
+yarn lerna-ci syncdeps --help
 ```
 
-You may need to run `yarn` or `npm install` to update lockfile.
+You may need to run `yarn` or `npm install` to make your changes take effect.
 
 ### canpublish
-check if all packages are qualified to publish to npm, using [getChangedPackages](#getchangedpackages) under the hood
+check if all packages are qualified to publish to npm, using [getChangedPackages](#getchangedpackages) under the hood, it will check:
+1. if local has uncommitted changes when in git repo and `--check-git` is true
+2. if local has conflicts when in git repo
+3. whether local is ahead of remote when in git repo
+4. if local packages' versions are synced with the latest version when `use-max-version` is true
+5. if next versions(can be configured via `releaseType` and `period`) of local packages are available on npm and git
+
+it will exit 1 if any of the above conditions is satisfied
+
 
 ```sh
-yarn lerna-ci canpublish <versionStrategy>
+yarn lerna-ci canpublish [--releaseType=patch]
 
+
+# check for more options and examples
+yarn lerna-ci canpublish --help
 ```
 
 ### fixpack

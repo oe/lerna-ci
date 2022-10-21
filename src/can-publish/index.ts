@@ -19,6 +19,11 @@ export interface ICanPushOptions {
    */
   releaseType: IReleaseType
   /**
+   * available when releaseType is pre*
+   * @default alpha
+   */
+  period?: string
+  /**
    * check local git has uncommitted changes
    */
   checkCommit?: boolean
@@ -84,7 +89,7 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
     await syncPruneGitTags()
   }
   // check alpha version
-  const versionAvailable = await checkNextVersionIsAvailable(options.releaseType, !!gitRoot)
+  const versionAvailable = await checkNextVersionIsAvailable(options.releaseType, !!gitRoot, options.period)
   if (versionAvailable !== true) {
     reasons.push({
       type: 'next-version-unavailable',
@@ -139,10 +144,15 @@ async function checkGitSyncStatus(): Promise<IGitSyncStatus> {
   }
 }
 
-async function checkNextVersionIsAvailable(publishStrategy: IReleaseType, checkGit: boolean) {
+async function checkNextVersionIsAvailable(publishStrategy: IReleaseType, checkGit: boolean, period?: string) {
   const pkgs = await getAllPackageDigests()
   const metas = pkgs.map(pkg => Object.assign({}, pkg, {
-    version: pkg.version && getNextVersion(pkg.name, pkg.version, publishStrategy),
+    version: pkg.version && getNextVersion({
+      pkgName: pkg.name,
+      version: pkg.version,
+      releaseType: publishStrategy,
+      period,
+    }),
   }))
   let result = await Promise.all(metas.map(meta => checkPkgVersionAvailable(meta, checkGit)))
   result = result.filter(item => item.available !== true)
@@ -185,13 +195,19 @@ async function checkPkgVersionAvailable(meta: IPackageDigest, checkGit: boolean)
   return result
 }
 
-function getNextVersion(pkgName: string, version: string, releaseType: IReleaseType) {
-  if (!version) return version
-  const strategy = releaseType === 'alpha' ? 'prerelease' : releaseType
-  const identifier = /^pre/.test(strategy) ? 'alpha' : undefined
-  const ver = semver.inc(version, strategy, identifier)
+interface IGetNextVersionOptions {
+  pkgName: string
+  version: string
+  releaseType: IReleaseType
+  period?: string
+}
+
+function getNextVersion(options: IGetNextVersionOptions) {
+  if (!options.version) return options.version
+  const identifier = /^pre/.test(options.releaseType) ? (options.period || 'alpha') : undefined
+  const ver = semver.inc(options.version, options.releaseType, identifier)
   if (ver === null) {
-    throw new Error(`package ${pkgName}'s version ${version} is invalid, unable to get its next version`)
+    throw new Error(`package ${options.pkgName}'s version ${options.version} is invalid, unable to get its next version`)
   }
   return ver
 }

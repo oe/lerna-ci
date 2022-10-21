@@ -61,7 +61,7 @@ export type IVersionRangeStrategy = IUpgradeVersionStrategy | '<' | '<='
  * all public strategy
  *  alpha is alias for prerelease
  */
-export const RELEASE_TYPES = <const>['major', 'minor', 'patch', 'prerelease', 'prepatch', 'preminor', 'premajor', 'alpha']
+export const RELEASE_TYPES = ['major', 'minor', 'patch', 'prerelease', 'prepatch', 'preminor', 'premajor'] as const
 
 /**
  * alpha for prerelease

@@ -49,7 +49,7 @@ const DEFAULT_OPTIONS: ISyncDepOptions = {
  * sync all packages' dependencies' versions
  * @param syncOptions options
  */
-export async function syncRemote(syncOptions: ISyncDepOptions): Promise<IChangedPackage[] | false> {
+export async function syncDeps(syncOptions: ISyncDepOptions): Promise<IChangedPackage[] | false> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgDigests = await getAllPackageDigests()
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

@@ -4,7 +4,7 @@ import yargs, { Options } from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import {
   syncLocal,
-  syncRemote,
+  syncDeps,
   canPublish,
   fixPackageJson,
   ISyncDepOptions,
@@ -39,21 +39,6 @@ const getVersionRangeOption = ()  => ({
     return val
   }
 })
-
-// const npmClientOptions = {
-//   alias: 'n',
-//   describe: 'current repo preferred npm client',
-//   coerce: (v) => {
-//     if (!v) return v
-//     if (/^yarn(.*)$/.test(v)) {
-//       if (RegExp.$1 === '' || RegExp.$1 === '1') return 'yarn'
-//       return 'yarn-next'
-//     }
-//     if (SUPPORTED_NPM_CLIENTS.includes(v)) return v
-//     throw new Error(colors.red(`unsupported npm client "${v}"`))
-//   },
-//   choices: SUPPORTED_NPM_CLIENTS
-// }
 
 const checkOnlyOptions: Options = {
   alias: 'c',
@@ -139,31 +124,30 @@ yargs(hideBin(process.argv))
       console.log('')
     }
   )
-  // command syncremote
+  // command syncdeps
   .command(
-    'syncremote [packages...]',
+    ['syncdeps <packages...>','syncremote'],
     'sync packages\' dependencies versions',
     (yargs) => yargs
-      .usage('$0 syncremote [packages...] [--range <versionRange>]')
+      .usage('$0 syncdeps <packages...> [--range <versionRange>]')
       .positional('packages', {
         description: 'packages\' names that need to be synced, support: specified package name, package name ',
         type: 'string',
         array: true
       })
       .example([
-        ['$0 syncremote react react-dom', 'update to latest stable version'],
-        ['$0 syncremote react react-dom -r "~"', 'update to latest stable version with custom version range'],
-        ['$0 syncremote "react@18" "react-dom@18" "webpack@^5.0.0"', 'update to specified versions with ranges'],
-        ['$0 syncremote parcel "@parcel/*"', 'by using *, update all parcel related dependencies'],
-        ['$0 syncremote "*plugin*"', 'update all packages that name contains `plugin`'],
-        ['$0 syncremote "parcel@2.7.0" "@parcel/*@2.7.0"', 'update all parcel related dependencies to specified version'],
+        ['$0 syncdeps react react-dom', 'update to latest stable version'],
+        ['$0 syncdeps react react-dom -r "~"', 'update to latest stable version with custom version range'],
+        ['$0 syncdeps "react@18" "react-dom@18" "webpack@^5.0.0"', 'update to specified versions with ranges'],
+        ['$0 syncdeps parcel "@parcel/*"', 'by using *, update all parcel related dependencies'],
+        ['$0 syncdeps "*plugin*"', 'update all packages that name contains `plugin`'],
+        ['$0 syncdeps "parcel@2.7.0" "@parcel/*@2.7.0"', 'update all parcel related dependencies to specified version'],
       ])
       .option('range', getVersionRangeOption())
-      // .option('npm', npmClientOptions)
       .option('check-only', checkOnlyOptions)
       .help(),
     async (argv) => {
-      const cmdName = 'syncremote'
+      const cmdName = 'syncdeps'
       const repoConfig = await getCliConfig()
       const syncRemoteConfig = argv.packages?.length ? argv.packages : repoConfig.syncremote
       if (!syncRemoteConfig) {
@@ -175,7 +159,7 @@ yargs(hideBin(process.argv))
         ? parsePackageNames(syncRemoteConfig)
         : { versionMap: syncRemoteConfig }
       // @ts-ignore
-      const updatedPkgs = await syncRemote(Object.assign(options, {
+      const updatedPkgs = await syncDeps(Object.assign(options, {
         versionRangeStrategy: argv.range,
         checkOnly: argv.checkOnly
       }))
@@ -214,6 +198,12 @@ yargs(hideBin(process.argv))
         describe: 'check whether git is committed, default true',
         type: 'boolean',
       })
+      .options('period', {
+        alias: 'p',
+        describe: 'period when release a pre-version, default to alpha',
+        type: 'string',
+        default: 'alpha',
+      })
       .options('use-max-version', {
         alias: 'm',
         describe: 'check whether local packages are using the maximal versions',
@@ -227,7 +217,8 @@ yargs(hideBin(process.argv))
         // @ts-ignore
         releaseType: argv.releaseType,
         checkCommit: argv.checkGit,
-        useMaxVersion: argv.useMaxVersion
+        useMaxVersion: argv.useMaxVersion,
+        period: argv.period,
       })
       if (result.eligible) {
         logger.success(`✨  [${CLI_NAME}][${cmdName}] ready to publish!`)
