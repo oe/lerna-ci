@@ -20,10 +20,26 @@ const processors: Record<INpmClient, typeof npm> = {
   pnpm: npm
 }
 
+
+export interface IGetPkgVersionsFromRegistryOptions {
+  /**
+   * package names
+   */
+  pkgNames: string[]
+  /**
+   * version pick strategy
+   */
+  versionStrategy?: IVersionPickStrategy
+  /**
+   * preferred npm client, detect automatically if not provided
+   */
+  npmClient?: INpmClient
+}
+
 /**
- * get versions from npm server
+ * get versions from npm registry
  */
-export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: IVersionPickStrategy, npmClient?: INpmClient) {
+export async function getVersionsFromRegistry({ pkgNames, versionStrategy, npmClient }: IGetPkgVersionsFromRegistryOptions) {
   const result: IVersionMap = {}
   const client = npmClient || await getRepoNpmClient()
   if (!processors[client]) {
@@ -31,7 +47,7 @@ export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: I
   }
   while (pkgNames.length) {
     const items = pkgNames.splice(-6)
-    const vers = await Promise.all(items.map(name => getPkgVersionFormRegistry({
+    const vers = await Promise.all(items.map(name => getVersionFormRegistry({
       pkgName: name,
       versionStrategy: versionStrategy || 'max',
       // @ts-ignore
@@ -45,7 +61,7 @@ export async function getVersionsFromNpm(pkgNames: string[], versionStrategy?: I
   return result
 }
 
-export async function getPkgVersionFormRegistry(
+export async function getVersionFormRegistry(
   options: IGetPkgVersionFromRegistryOptions & {npmClient?: INpmClient }): Promise<string | undefined> {
   const npmClient = options.npmClient || await getRepoNpmClient()
   const client = processors[npmClient]

@@ -6,11 +6,10 @@ import {
   syncLocal,
   syncDeps,
   canPublish,
-  fixPackageJson,
+  fixpack,
   ISyncDepOptions,
   setConfig,
   logger,
-  // SUPPORTED_NPM_CLIENTS,
   getRepoNpmClient,
   getIndent,
   RELEASE_TYPES,
@@ -58,7 +57,7 @@ yargs(hideBin(process.argv))
       if (!repoConfig.fixpack) {
         logger.info('custom fixpack config not found, using default config')
       }
-      await fixPackageJson(repoConfig.fixpack)
+      await fixpack(repoConfig.fixpack)
     }
   )
   // command synclocal
@@ -144,6 +143,12 @@ yargs(hideBin(process.argv))
         ['$0 syncdeps "parcel@2.7.0" "@parcel/*@2.7.0"', 'update all parcel related dependencies to specified version'],
       ])
       .option('range', getVersionRangeOption())
+      .option('exact', {
+        describe: 'use exact version with custom version `range` options(^, ~, >=, >, =, no punctuation), or only update when existing version range is not satisfied',
+        alias: 'e',
+        type: 'boolean',
+        default: true,
+      })
       .option('check-only', checkOnlyOptions)
       .help(),
     async (argv) => {

@@ -49,6 +49,7 @@ export type IVerTransform = (name: string, newVersion: string, oldVersion: strin
 
 /**
  * upgrade version strategy
+ *  retain: retain the original version range
  */
 export type IUpgradeVersionStrategy = '>' | '~' | '^' | '>=' | '' | 'retain' | IVerTransform 
 /**

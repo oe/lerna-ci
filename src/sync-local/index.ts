@@ -6,7 +6,7 @@ import {
   getAllPackageDigests,
   IPackageFilterOptions,
   updatePackageJSON,
-  getVersionsFromNpm,
+  getVersionsFromRegistry,
   getPackageVersionsFromGit,
   IVersionPickStrategy,
   IUpgradeVersionStrategy,
@@ -19,11 +19,12 @@ export interface ISyncPackageOptions {
   /**
    * version source, default to `local`
    * how to get latest locale package versions: npm, git, local or all
+   * @default 'all'
    */
   versionSource?: EVerSource
   /**
    * npm/git version strategy
-   *  default to 'latest'
+   * @default 'latest'
    */
   versionStrategy?: IVersionPickStrategy
   /**
@@ -31,7 +32,8 @@ export interface ISyncPackageOptions {
    */
   packageFilter?: IPackageFilterOptions
   /**
-   * version range strategy 
+   * version range strategy
+   * @default 'retain'
    */
   versionRangeStrategy?: IUpgradeVersionStrategy
   /**
@@ -46,9 +48,9 @@ export interface ISyncPackageOptions {
 }
 
 const DEFAULT_OPTIONS: ISyncPackageOptions = {
-  versionSource: EVerSource.LOCAL,
+  versionSource: EVerSource.ALL,
   versionStrategy: 'latest',
-  versionRangeStrategy: '^',
+  versionRangeStrategy: 'retain',
 }
 
 /**
@@ -100,7 +102,7 @@ async function getLatestVersions(
   let npmVers: IVersionMap = {}
   if (verSource !== EVerSource.GIT) {
     // can not get version from private package
-    npmVers = await getVersionsFromNpm(pkgs.filter(p => !p.private).map(item => item.name), versionStrategy)
+    npmVers = await getVersionsFromRegistry({ pkgNames: pkgs.filter(p => !p.private).map(item => item.name), versionStrategy })
   }
 
   // versions info from git

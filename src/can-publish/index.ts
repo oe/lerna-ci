@@ -7,7 +7,7 @@ import {
   getGitRoot,
   IPackageDigest,
   syncPruneGitTags,
-  getPkgVersionFormRegistry,
+  getVersionFormRegistry,
   logger,
   IChangedPackage,
 } from '../common'
@@ -186,7 +186,7 @@ async function checkPkgVersionAvailable(meta: IPackageDigest, checkGit: boolean)
   }
   // only check public package for version
   if (!meta.private) {
-    const version = await getPkgVersionFormRegistry({pkgName: meta.name, version: meta.version})
+    const version = await getVersionFormRegistry({pkgName: meta.name, version: meta.version})
     if (version) {
       result.available = false
       result.reasons = (result.reasons || []).concat(['npm'])

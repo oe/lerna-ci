@@ -1,7 +1,7 @@
 import {
   getAllPackageDigests,
   getVersionTransformer,
-  getVersionsFromNpm,
+  getVersionsFromRegistry,
   IVersionPickStrategy,
   updatePackageJSON,
   IVersionRangeStrategy,
@@ -18,12 +18,19 @@ export interface ISyncDepOptions {
   /** 
    * package names that should update
    *  will fetch its version from npm by default
+   *  package name can use asterisk, e.g. @babel/*
+   * 
+   * @example
+   *  ['duplex-message', '@typescript-eslint/parser', '@babel/*', '*plugin*', 'react*']
    */
   packageNames?: string[]
   /**
    * version map<pkgName, version>
    *  prefer use this as version map if provided
+   *  pkgName can be a pattern like @babel/*
    *  if packageNames also provided, will fetch missing versions
+   * @example
+   * {'@babel/*': '7.0.0', 'parcel': '^2.0.0', '@types/react': '~18.0.0'}
    */
   versionMap?: IVersionMap
   /**
@@ -37,12 +44,19 @@ export interface ISyncDepOptions {
   versionRangeStrategy?: IVersionRangeStrategy
   /** only check, with package.json files untouched */
   checkOnly?: boolean
+  /**
+   * update version to the exact given version
+   *  set to false only update when existing version range is not satisfied
+   * @default true
+   */
+  exact?: boolean
 }
 
 const DEFAULT_OPTIONS: ISyncDepOptions = {
   versionMap: {},
   versionRangeStrategy: 'retain',
-  versionPickStrategy: 'max-stable'
+  versionPickStrategy: 'max-stable',
+  exact: true,
 }
 
 /**
@@ -59,7 +73,7 @@ export async function syncDeps(syncOptions: ISyncDepOptions): Promise<IChangedPa
     const pkgsHasVersion = Object.keys(versionMap)
     const pkgsWithoutVersion = packageNames.filter(n => pkgsHasVersion.indexOf(n) === -1)
     if (pkgsWithoutVersion.length) {
-      const versionFromNpm = await getVersionsFromNpm(pkgsWithoutVersion, options.versionPickStrategy)
+      const versionFromNpm = await getVersionsFromRegistry({ pkgNames: pkgsWithoutVersion, versionStrategy: options.versionPickStrategy })
       // add version range to versionFromNpm 
       versionMap = Object.assign({}, versionFromNpm, versionMap)
     }
@@ -74,6 +88,7 @@ export async function syncDeps(syncOptions: ISyncDepOptions): Promise<IChangedPa
       latestVersions: versionMap,
       versionTransform: getVersionTransformer(options.versionRangeStrategy),
       checkOnly: options.checkOnly,
+      exact: options.exact,
     })
     return changes && Object.assign({}, item, { changes })
   }).filter(Boolean)
