@@ -4,4 +4,4 @@ export * from './common'
 export * from './sync-deps'
 export * from './fixpack-all'
 export * from './can-publish'
-
+export * from './changed'

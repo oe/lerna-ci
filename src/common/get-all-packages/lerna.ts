@@ -8,9 +8,9 @@ import { getProjectRoot, isWin, runNpmCmd } from '../utils'
  * get all package's info in a lerna project
  */
 export async function getAllPackages(): Promise<IPackageDigest[] | false> {
-  const rootRepo = await getProjectRoot()
+  const isUsingLerna = await isManagedByLerna()
   // not lerna powered project
-  if (!fs.existsSync(path.join(rootRepo, 'lerna.json'))) return false
+  if (!isUsingLerna) return false
   const isLernaInstalled = await checkLerna()
   if (!isLernaInstalled) {
     throw new Error('lerna not installed, please install project\' dependencies')
@@ -36,6 +36,13 @@ export async function getChangedPackages(): Promise<IPackageDigest[]> {
   const pkgsString = await runNpmCmd('--no-install', 'lerna', 'changed', '--json')
   const result = JSON.parse(cleanUpLernaCliOutput(pkgsString)) as IPackageDigest[]
   return result
+}
+
+/** check whether monorepo is managed by lerna */
+export async function isManagedByLerna() {
+  const rootRepo = await getProjectRoot()
+  // not lerna powered project
+  return fs.existsSync(path.join(rootRepo, 'lerna.json'))
 }
 
 let isLernaInstalled: undefined | boolean

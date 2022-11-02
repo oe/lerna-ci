@@ -116,3 +116,13 @@ export function getAllDependencies(allPkgDigests: IPackageDigest[]) {
   allPackageNames = results.reduce((acc, cur) => acc.concat(cur), allPackageNames)
   return Array.from(new Set(allPackageNames))
 }
+
+
+export class CIError extends Error {
+  type: string
+  constructor(type: string, message: string) {
+    super(message)
+    this.type = type
+    this.name = 'CIError'
+  }
+}

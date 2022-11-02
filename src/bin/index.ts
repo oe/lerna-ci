@@ -13,13 +13,15 @@ import {
   getRepoNpmClient,
   getIndent,
   RELEASE_TYPES,
+  getChanged,
 } from '../index'
 import { getCliConfig, CLI_NAME } from './config'
 import {
-  printChangedPackages,
+  printChangedPackageJsons,
   printGitSyncStatus,
   printPkgVersionConflicts,
   printGitStatus,
+  printChangedPackages,
 } from './pretty-print'
 
 setConfig({ debug: true })
@@ -58,6 +60,23 @@ yargs(hideBin(process.argv))
         logger.info('custom fixpack config not found, using default config')
       }
       await fixpack(repoConfig.fixpack)
+    }
+  )
+  .command(
+    'changed',
+    'get all changed packages',
+    (yargs) => yargs
+      .option('throw', {
+        alias: 't',
+        describe: 'throw error if changed packages found',
+        type: 'boolean',
+      }),
+    async (argv) => {
+      const changedPkgs = await getChanged()
+      await printChangedPackages(changedPkgs)
+      if (argv.throw && changedPkgs.length) {
+        process.exit(1)
+      }
     }
   )
   // command synclocal
@@ -107,7 +126,7 @@ yargs(hideBin(process.argv))
 
       if (updatedPkgs) {
         logger.log(`[${CLI_NAME}][${cmdName}] the following package.json files ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
-        await printChangedPackages(updatedPkgs)
+        await printChangedPackageJsons(updatedPkgs)
         if (!argv.checkOnly) {
           let npmClient = await getRepoNpmClient()
           npmClient = /^yarn/.test(npmClient) ? 'yarn' : npmClient
@@ -170,7 +189,7 @@ yargs(hideBin(process.argv))
       }))
       if (updatedPkgs) {
         logger.log(`[${CLI_NAME}][${cmdName}] the following package.json files' dependencies ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
-        await printChangedPackages(updatedPkgs)
+        await printChangedPackageJsons(updatedPkgs)
         if (!argv.checkOnly) {
           let npmClient = await getRepoNpmClient()
           npmClient = /^yarn/.test(npmClient) ? 'yarn' : npmClient
@@ -242,7 +261,7 @@ yargs(hideBin(process.argv))
               break
             case 'local-version-outdated':
               logger.warn(`${getIndent(1)}local project packages' versions are outdated:`)
-              await printChangedPackages(reason.content, 2)
+              await printChangedPackageJsons(reason.content, 2)
               break
             case 'next-version-unavailable':
               logger.warn(`${getIndent(1)}next release versions of some packages' are occupied:`)

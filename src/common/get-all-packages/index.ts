@@ -9,6 +9,8 @@ import { logger } from '../logger'
 import * as lerna from './lerna'
 import * as native from './native-client'
 
+export { isManagedByLerna } from './lerna'
+
 /** package filter object */
 export interface IPackageFilterObject {
   /** whether need private package */

@@ -10,9 +10,10 @@ import {
   IPkgVersionAvailability,
   getIndent,
   IGitSyncStatus,
+  IPackageDigest,
 } from '../index'
 
-export async function printChangedPackages(changes: IChangedPackage[], indent = 0, level: ILoggerLevel = 'warn') {
+export async function printChangedPackageJsons(changes: IChangedPackage[], indent = 0, level: ILoggerLevel = 'warn') {
   const rootPath = await getProjectRoot()
   const msgs: IMessageTree[] = changes.map(item => {
     return {
@@ -69,4 +70,22 @@ function shortenLocation(location: string, rootPath: string) {
   let res = location.replace(rootPath, '')
   if (res.startsWith(path.sep)) res = res.replace(path.sep, '')
   return res || '.'
+}
+
+export async function printChangedPackages(pkgs: IPackageDigest[], indent = 0) {
+  if (pkgs.length === 0) {
+    logger.success(`${getIndent(indent)}no changed packages`)
+    return
+  }
+  logger.warn(`${getIndent(indent)}found ${pkgs.length} changed packages`)
+  const rootPath = await getProjectRoot()
+  const msgs: IMessageTree[] = pkgs.map(item => {
+    return {
+      title: `${item.name}(${shortenLocation(item.location, rootPath)})`,
+      children: [{
+        title: `version: ${item.version}; private: ${item.private}`,
+      }]
+    }
+  })
+  msgs.forEach(item => logger.log(formatMessages(item, indent + 1)))
 }

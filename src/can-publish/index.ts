@@ -12,6 +12,7 @@ import {
   IChangedPackage,
 } from '../common'
 import { syncLocal } from '../sync-local'
+import { getChanged } from '../changed'
 
 export interface ICanPushOptions {
   /**
@@ -51,6 +52,25 @@ export interface IPublishQualification {
 
 export async function canPublish(options: ICanPushOptions): Promise<IPublishQualification> {
   const gitRoot = await getGitRoot()
+  if (gitRoot) {
+    await syncPruneGitTags()
+  }
+  let changedPkgs: IPackageDigest[] = []
+  try {
+    changedPkgs = await getChanged()
+    if (!changedPkgs.length) {
+      logger.warn('no changed packages found, nothing to publish')
+    }
+  } catch (error) {
+    // @ts-ignore
+    if (error.type === 'not-support') {
+      logger.warn('unable to get changed packages(via `lerna-ci changed`), will check all packages')
+      changedPkgs = await getAllPackageDigests()
+    } else {
+      throw error
+    }
+  }
+
   const reasons: IFailPublishReason[] = []
   if (gitRoot) {
     const gitStatus = await checkGitLocalStatus(options.checkCommit)
@@ -85,16 +105,15 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
       })
     }
   }
-  if (gitRoot) {
-    await syncPruneGitTags()
-  }
-  // check alpha version
-  const versionAvailable = await checkNextVersionIsAvailable(options.releaseType, !!gitRoot, options.period)
-  if (versionAvailable !== true) {
-    reasons.push({
-      type: 'next-version-unavailable',
-      content: versionAvailable
-    })
+  if (changedPkgs.length) {
+    // check alpha version
+    const versionAvailable = await checkNextVersionIsAvailable(changedPkgs, options.releaseType, !!gitRoot, options.period)
+    if (versionAvailable !== true) {
+      reasons.push({
+        type: 'next-version-unavailable',
+        content: versionAvailable
+      })
+    }
   }
   return reasons.length ? { eligible: false, reasons } : { eligible: true }
 }
@@ -144,8 +163,8 @@ async function checkGitSyncStatus(): Promise<IGitSyncStatus> {
   }
 }
 
-async function checkNextVersionIsAvailable(publishStrategy: IReleaseType, checkGit: boolean, period?: string) {
-  const pkgs = await getAllPackageDigests()
+async function checkNextVersionIsAvailable(pkgs: IPackageDigest[], publishStrategy: IReleaseType, checkGit: boolean, period?: string) {
+  // const pkgs = await getAllPackageDigests()
   const metas = pkgs.map(pkg => Object.assign({}, pkg, {
     version: pkg.version && getNextVersion({
       pkgName: pkg.name,
