@@ -1,4 +1,3 @@
-
 /**
  * package version data source
  */

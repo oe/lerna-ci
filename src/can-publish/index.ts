@@ -17,6 +17,7 @@ import { getChanged } from '../changed'
 export interface ICanPushOptions {
   /**
    * version release type
+   * @default patch
    */
   releaseType: IReleaseType
   /**
@@ -164,7 +165,6 @@ async function checkGitSyncStatus(): Promise<IGitSyncStatus> {
 }
 
 async function checkNextVersionIsAvailable(pkgs: IPackageDigest[], publishStrategy: IReleaseType, checkGit: boolean, period?: string) {
-  // const pkgs = await getAllPackageDigests()
   const metas = pkgs.map(pkg => Object.assign({}, pkg, {
     version: pkg.version && getNextVersion({
       pkgName: pkg.name,
@@ -223,8 +223,9 @@ interface IGetNextVersionOptions {
 
 function getNextVersion(options: IGetNextVersionOptions) {
   if (!options.version) return options.version
+  const releaseType = options.releaseType || 'patch'
   const identifier = /^pre/.test(options.releaseType) ? (options.period || 'alpha') : undefined
-  const ver = semver.inc(options.version, options.releaseType, identifier)
+  const ver = semver.inc(options.version, releaseType, identifier)
   if (ver === null) {
     throw new Error(`package ${options.pkgName}'s version ${options.version} is invalid, unable to get its next version`)
   }

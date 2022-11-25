@@ -43,7 +43,7 @@ const getVersionRangeOption = ()  => ({
 
 const checkOnlyOptions: Options = {
   alias: 'c',
-  describe: 'check for changes with package.jsons untouched',
+  describe: 'check for changes with package.json files untouched',
   type: 'boolean',
 }
 
@@ -85,6 +85,14 @@ yargs(hideBin(process.argv))
     'sync local packages versions to remote(git tags, npm versions)',
     (yargs) => yargs
       .usage('$0 synclocal [source] [--range <versionRange>]')
+      .example([
+        ['$0 synclocal', 'sync all local packages\' versions using all sources'],
+        ['$0 synclocal local', 'sync all local packages\' versions using local packages\' versions'],
+        ['$0 synclocal local --range "^"', 'sync all local packages\' versions using local packages\' versions and reset version range to caret(^)'],
+        ['$0 synclocal local --range "retain"', 'sync all local packages\' versions using local packages\' versions and keep version range'],
+        ['$0 synclocal git --exact false', 'sync all local packages\' versions using git tags and only update when existing version range is not satisfied with the new version'],
+        ['$0 synclocal --check-only', 'check all local packages\' versions using all sources and exit with code 1 if any package.json file will be changed'],
+      ])
       .positional('source', {
         describe: 'packages\' versions sources, could be:\
           local: monorepo itself\
@@ -148,11 +156,6 @@ yargs(hideBin(process.argv))
     'sync packages\' dependencies versions',
     (yargs) => yargs
       .usage('$0 syncdeps <packages...> [--range <versionRange>]')
-      .positional('packages', {
-        description: 'packages\' names that need to be synced, support: specified package name, package name ',
-        type: 'string',
-        array: true
-      })
       .example([
         ['$0 syncdeps react react-dom', 'update to latest stable version'],
         ['$0 syncdeps react react-dom -r "~"', 'update to latest stable version with custom version range'],
@@ -160,7 +163,14 @@ yargs(hideBin(process.argv))
         ['$0 syncdeps parcel "@parcel/*"', 'by using *, update all parcel related dependencies'],
         ['$0 syncdeps "*plugin*"', 'update all packages that name contains `plugin`'],
         ['$0 syncdeps "parcel@2.7.0" "@parcel/*@2.7.0"', 'update all parcel related dependencies to specified version'],
+        ['$0 syncdeps "parcel@2.7.0" "@parcel/*@2.7.0" --exact false', 'only update all parcel related dependencies when existing version range is not satisfied with the specified version'],
+        ['$0 syncdeps "parcel@2.7.0" "@parcel/*@2.7.0" --check-only', 'check whether all parcel related dependencies will update to specified version and exit with code 1 if any package.json file will be changed'],
       ])
+      .positional('packages', {
+        description: 'packages\' names that need to be synced, support: specified package name, package name ',
+        type: 'string',
+        array: true
+      })
       .option('range', getVersionRangeOption())
       .option('exact', {
         describe: 'use exact version with custom version `range` options(^, ~, >=, >, =, no punctuation), or only update when existing version range is not satisfied',
@@ -211,6 +221,13 @@ yargs(hideBin(process.argv))
     'check whether it\'s eligible to publish next version',
     (yargs) => yargs
       .usage('$0 canpublish [releaseType]')
+      .example([
+        ['$0 canpublish', 'check whether all changed packages are eligible to publish next patch versions'],
+        ['$0 canpublish --releaseType major', 'check whether all changed packages are eligible to publish next major versions'],
+        ['$0 canpublish --period beta', 'check whether all changed packages are eligible to publish next patch\'s beta versions'],
+        ['$0 canpublish --releaseType minor --period beta', 'check whether all changed packages are eligible to publish next minor\'s beta versions'],
+        ['$0 canpublish --releaseType minor --use-max-version', 'check whether all changed packages are eligible to publish next minor version and whether all packages\' versions are synced to the latest'],
+      ])
       .positional('releaseType', {
         description: 'next version type, like major, minor, patch or alpha(for test), default to patch',
         default: 'patch',
@@ -230,7 +247,7 @@ yargs(hideBin(process.argv))
       })
       .options('use-max-version', {
         alias: 'm',
-        describe: 'check whether local packages are using the maximal versions',
+        describe: 'check whether all local packages are using the latest versions',
         type: 'boolean',
       })
       .version(false)

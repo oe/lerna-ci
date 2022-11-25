@@ -25,19 +25,6 @@ export async function getAllPackages(): Promise<IPackageDigest[] | false> {
   return JSON.parse(cleanUpLernaCliOutput(pkgsString)) as IPackageDigest[]
 }
 
-/**
- * get all changed packages according to your lerna.json's configuration
- */
-export async function getChangedPackages(): Promise<IPackageDigest[]> {
-  const isLernaInstalled = await checkLerna()
-  if (!isLernaInstalled) {
-    return []
-  }
-  const pkgsString = await runNpmCmd('--no-install', 'lerna', 'changed', '--json')
-  const result = JSON.parse(cleanUpLernaCliOutput(pkgsString)) as IPackageDigest[]
-  return result
-}
-
 /** check whether monorepo is managed by lerna */
 export async function isManagedByLerna() {
   const rootRepo = await getProjectRoot()

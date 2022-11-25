@@ -77,10 +77,6 @@ export interface IUpdatePackageJSONOptions {
 
 /**
  * update a single pkg's package.json, return true if any things updated
- * @param pkgDigest a single pkg's digest info
- * @param latestVersions latest version of all locale packages
- * @param checkOnly only check, with package.json untouched
- * @param pkgVersion current pkg's latest version, without range indicator(aka, >, ^, ~, etc)
  */
 export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedCategory[] | false {
   const { pkgVersion, pkgDigest, latestVersions, checkOnly, versionTransform } = options

@@ -10,6 +10,7 @@ import {
   runNpmCmd,
   IPackageDigest,
   getProjectRoot,
+  getGitRoot,
   logger,
   getAllPackageDigests,
   CIError,
@@ -17,6 +18,10 @@ import {
 
 export async function getChanged() {
   const isUsingLerna = await isManagedByLerna()
+  const isGit = await getGitRoot()
+  if (!isGit) {
+    throw new CIError('not-in-git-repo', 'getChanged(changed) only works in git repo')
+  }
   if (isUsingLerna) {
     logger.info('using lerna to detect changed packages')
     return await getChangedByLerna()

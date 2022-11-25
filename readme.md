@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/npm/dm/lerna-ci.svg" alt="npm downloads" height="20">
   </a>
 </div>
-<h4 align="center">The essential toolkit for monorepo managed by <a href="https://lerna.js.org/">lerna/npm/yarn/pnpm/turbo</a></h4>
+<h4 align="center">The essential toolkit for monorepo managed by <a href="https://lerna.js.org/">lerna/npm/yarn/pnpm/turbo/etc</a></h4>
 
 
 - [Features](#features)
@@ -22,21 +22,23 @@
 - [Usage](#usage)
 - [Cli commands](#cli-commands)
   - [synclocal](#synclocal)
-  - [syncremote](#syncremote)
+  - [syncdeps](#syncdeps)
   - [canpublish](#canpublish)
   - [fixpack](#fixpack)
+  - [changed](#changed)
 - [API](#api)
   - [getAllPackageDigests](#getallpackagedigests)
-  - [syncPackageVersions](#syncpackageversions)
-  - [syncPackageDependenceVersion](#syncpackagedependenceversion)
-  - [fixPackageJson](#fixpackagejson)
-  - [getChangedPackages](#getchangedpackages)
+  - [syncLocal](#synclocal-api)
+  - [syncDeps](#syncdeps-api)
+  - [fixpack](#fixpack-api)
+  - [getChanged](#getChanged)
   - [getRepoNpmClient](#getreponpmclient)
-  - [addRange2VersionMap](#addrange2versionmap)
-  - [getSingleVersionFromNpm](#getsingleversionfromnpm)
-  - [getVersionsFromNpm](#getversionsfromnpm)
+  - [getVersionFormRegistry](#getversionformregistry)
+  - [getVersionsFromRegistry](#getversionsfromregistry)
   - [getPackageVersionsFromGit](#getpackageversionsfromgit)
   - [isLernaAvailable](#islernaavailable)
+  - [getGitRoot](#getgitroot)
+  - [getProjectRoot](#getprojectroot)
   - [maxVersion](#maxversion)
   - [pickOne](#pickone)
 - [Configuration file](#configuration-file)
@@ -44,9 +46,13 @@
 
 ## Features
 * sync versions of packages in monorepo (with cli command)
-* sync dependencies versions of all packages (with cli command)
+* sync(update) dependencies versions of all packages (with cli command)
+  * can update to latest version
+  * can update to specified version
+  * can specify packages with wildcard characters
 * format all package.json files (with cli command)
 * check if all packages are qualified to publish to npm (with cli command)
+* list all packages(requires `lerna` or `@changesets/cli`) (with cli command)
 * get all packages' meta info
 * some other useful utilities
 
@@ -98,20 +104,25 @@ npx lerna-ci synclocal [source] [--check-only]
 
 # check for more options and examples
 yarn lerna-ci synclocal --help
+
+# demo
+yarn lerna-ci synclocal
 ```
 
-It's very useful when local packages versions are messed up, such as:
-1. you have a monorepo with 2 packages, `a` and `b`, and `b` depends on `a`
-2. `a` has published a new version `1.0.2`, but `a`'s version in `b` is still `0.3.0`
-
-this may lead to some unexpected errors, it can happens in some cases:
+It's very useful when local packages versions are messed up, this may lead to some unexpected errors, it can happens in some cases:
 1. publish a beta version inside a package without using lerna(or other monorepo tools)
 2. partial success when publish packages with lerna(or other monorepo tools), you may use `yarn lerna-ci synclocal all` to fix it
 
 You may need to run `yarn` or `npm install` to make your changes take effect.
 
 ### syncdeps
-sync all packages' dependencies versions in monorepo, using [syncDeps](#syncdeps-api) under the hood
+sync all packages' dependencies versions in monorepo, using [syncDeps](#syncdeps-api) under the hood.
+
+It will update following kinds of dependencies:
+* dependencies
+* devDependencies
+* optionalDependencies
+* peerDependencies
 
 ```sh
 # with yarn
@@ -119,6 +130,7 @@ yarn lerna-ci syncdeps <packageNames...> [--check-only]
 # packageNames could be a list of package names, or a list of package name with version range, such as: 
 #     "@babel/*" "@babel/core@^7.0.0" "parcel@^2.0.0" "rollup-plugin*"
 #     package name with asterisk(*) must be quoted
+# packageNames not found or not matched will be ignored
 # if check-only is true, it will check if any package's dependencies need be synced, exit 1 if found
 
 # or if you prefer npm, must use quotes when specify scoped wildcard package name
@@ -126,27 +138,37 @@ npx lerna-ci syncdeps <packageNames...> [--check-only]
 
 # check for more options and examples
 yarn lerna-ci syncdeps --help
+
+# demo
+## sync all babel related packages' versions to `^7.0.0`, all packages that start with `eslint-plugin-` to latest, and react react-dom to `18.2.0`
+yarn lerna-ci syncdeps "@babel/*@^7.0.0" "eslint-plugin-*" react@18.2.0 react-dom@18.2.0
 ```
 
 You may need to run `yarn` or `npm install` to make your changes take effect.
 
 ### canpublish
-check if all packages are qualified to publish to npm, using [getChangedPackages](#getchangedpackages) under the hood, it will check:
-1. if local has uncommitted changes when in git repo and `--check-git` is true
-2. if local has conflicts when in git repo
-3. whether local is ahead of remote when in git repo
-4. if local packages' versions are synced with the latest version when `use-max-version` is true
-5. if next versions(can be configured via `releaseType` and `period`) of local packages are available on npm and git
+check if all packages are qualified to publish to npm, using [getChanged](#getChanged) under the hood if `lerna` or `@changesets/cli` is available, it will check:
+1. whether local has uncommitted changes when in git repo if `--check-git` is true
+2. whether local has conflicts when in git repo
+3. whether local is behind of remote when in git repo
+4. whether local packages' versions are synced with the latest version when `use-max-version` is true
+5. whether next versions(can be configured via `releaseType` and `period`) of local packages are occupied on npm and git
 
 it will exit 1 if any of the above conditions is satisfied
 
 
 ```sh
-yarn lerna-ci canpublish [--releaseType=patch]
-
+yarn lerna-ci canpublish [--releaseType=patch] [--period=alpha]
+# releaseType: patch, minor, major, prepatch, preminor, premajor, prerelease
+#              default patch
+# period: a string like alpha, beta, rc, etc, default alpha, only available when releaseType is pre*
 
 # check for more options and examples
 yarn lerna-ci canpublish --help
+
+# demo
+# check if all (changed) packages are qualified to publish a beta version in patch
+yarn lerna-ci canpublish --releaseType=patch --period=beta
 ```
 
 ### fixpack
@@ -161,6 +183,19 @@ npx lerna-ci fixpack
 ```
 above command will format all package.json files with default configuration, you can configure `fixpack`'s params via [configuration file](#configurationfile)
 
+### changed
+list all changed packages, using [getChanged](#getChanged) under the hood
+
+```sh
+# with yarn
+yarn lerna-ci changed
+
+# or if you prefer npm
+npx lerna-ci changed
+```
+above command requires package [`lerna`](https://www.npmjs.com/package/lerna) or [`@changesets/cli`](https://www.npmjs.com/package/@changesets/cli) to be installed,  or it will exit 1.
+
+You should configure `lerna` or `@changesets/cli` following their documentations and manage your packages under their official guidelines, or this command will not work as expected.
 
 ## API
 
@@ -374,6 +409,26 @@ export interface IFixPackOptions {
 }
 ```
 
+### getChanged
+List all changed packages since last release, it requires package `lerna` or `@changesets/cli` to be installed.
+
+> also available as command [changed](#changed)
+
+e.g.
+```js
+import { getChanged } from 'lerna-ci'
+
+const changedPkgs = await getChanged()
+// [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
+
+```
+
+Type Declarations:
+```ts
+getChanged() => Promise<IPackageDigest[]>
+
+```
+
 ### getRepoNpmClient
 get current monorepo preferred npm client
 
@@ -382,7 +437,7 @@ e.g.
 import { getRepoNpmClient } from 'lerna-ci'
 
 // will return npm for default if not specified
-//   get `yarn-next` when yarn >= 2.0 found 
+//   get `yarn-next` when yarn version >= 2.0 found 
 getRepoNpmClient().then(client => console.log(client))
 // yarn
 ```
@@ -469,6 +524,30 @@ import { isLernaAvailable } from 'lerna-ci'
 
 isLernaAvailable().then(isInstalled => console.log(isInstalled))
 // true
+```
+
+### getGitRoot
+get git root path of current repo
+
+e.g.
+```js
+import { getGitRoot } from 'lerna-ci'
+
+// return false if not in a git repo
+const maxVer = await getGitRoot()
+// /User/xx/work/monorepo
+```
+
+### getProjectRoot
+get current project's root path (which contains a `package.json` file)
+
+e.g.
+```js
+import { getProjectRoot } from 'lerna-ci'
+
+// throw error if not in a valid frontend project
+const maxVer = await getProjectRoot()
+// /User/xx/work/monorepo
 ```
 
 ### maxVersion
