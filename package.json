@@ -1,6 +1,6 @@
 {
   "name": "lerna-ci",
-  "version": "2.0.0-alpha.6",
+  "version": "2.0.0",
   "description": "The essential toolkit for monorepo managed by lerna",
   "author": "Saiya",
   "repository": "https://github.com/oe/lerna-ci.git",
