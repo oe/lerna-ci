@@ -1,7 +1,11 @@
-import fixpack from 'fixpack'
+import fixpackLib from 'fixpack'
 import path from 'path'
-import { IPackageDigest } from '../types'
-import { getAllPackageDigests, IPackageFilterOptions} from '../pkg-info'
+import {
+  getAllPackageDigests,
+  IPackageFilterOptions,
+  IPackageDigest,
+  logger,
+} from '../common'
 import defaultConfig from './config'
 
 export interface IFixPackOptions {
@@ -16,12 +20,12 @@ export interface IFixPackOptions {
   config?: any
 }
 
-export async function fixPackageJson (options: IFixPackOptions = {}): Promise<IPackageDigest[]> {
+export async function fixpack (options: IFixPackOptions = {}): Promise<IPackageDigest[]> {
   const pkgs = await getAllPackageDigests(options.packageFilter)
   const pwd = process.cwd()
   return pkgs.filter((pkg) => {
-    console.log(`\nchecking '${pkg.name}' in ${pkg.location.replace(pwd, '.')}`)
-    const changed = fixpack(path.join(pkg.location, 'package.json'), options.config || defaultConfig)
+    logger.info(`\nchecking '${pkg.name}' in ${pkg.location.replace(pwd, '.')}`)
+    const changed = fixpackLib(path.join(pkg.location, 'package.json'), options.config || defaultConfig)
     return changed
   })
 }

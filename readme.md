@@ -14,38 +14,49 @@
     <img src="https://img.shields.io/npm/dm/lerna-ci.svg" alt="npm downloads" height="20">
   </a>
 </div>
-<h4 align="center">The essential toolkit for monorepo managed by <a href="https://lerna.js.org/">lerna</a></h4>
+<h4 align="center">The essential toolkit for monorepo managed by <a href="https://lerna.js.org/">lerna/npm/yarn/pnpm/turbo/etc</a></h4>
+
 
 - [Features](#features)
 - [Install](#install)
-- [API](#api)
-  - [syncPackageVersions](#syncpackageversions)
-  - [syncPackageDependenceVersion](#syncpackagedependenceversion)
-  - [fixPackageJson](#fixpackagejson)
-  - [getAllPackageDigests](#getallpackagedigests)
-  - [getChangedPackages](#getchangedpackages)
-  - [getRepoNpmClient](#getreponpmclient)
-  - [addRange2VersionMap](#addrange2versionmap)
-  - [getSingleVersionFromNpm](#getsingleversionfromnpm)
-  - [getVersionsFromNpm](#getversionsfromnpm)
-  - [getPackageVersionsFromGit](#getpackageversionsfromgit)
-  - [isLernaAvailable](#islernaavailable)
-  - [maxVersion](#maxversion)
-  - [pickOne](#pickone)
+- [Usage](#usage)
 - [Cli commands](#cli-commands)
   - [synclocal](#synclocal)
-  - [syncremote](#syncremote)
+  - [syncdeps](#syncdeps)
+  - [canpublish](#canpublish)
   - [fixpack](#fixpack)
+  - [changed](#changed)
+- [API](#api)
+  - [getAllPackageDigests](#getallpackagedigests)
+  - [syncLocal](#synclocal-api)
+  - [syncDeps](#syncdeps-api)
+  - [fixpack](#fixpack-api)
+  - [getChanged](#getChanged)
+  - [getRepoNpmClient](#getreponpmclient)
+  - [getVersionFormRegistry](#getversionformregistry)
+  - [getVersionsFromRegistry](#getversionsfromregistry)
+  - [getPackageVersionsFromGit](#getpackageversionsfromgit)
+  - [isLernaAvailable](#islernaavailable)
+  - [getGitRoot](#getgitroot)
+  - [getProjectRoot](#getprojectroot)
+  - [maxVersion](#maxversion)
+  - [pickOne](#pickone)
 - [Configuration file](#configuration-file)
 - [Breaking changes](#breaking-changes)
 
 ## Features
 * sync versions of packages in monorepo (with cli command)
-* sync dependencies versions of all packages (with cli command)
+* sync(update) dependencies versions of all packages (with cli command)
+  * can update to latest version
+  * can update to specified version
+  * can specify packages with wildcard characters
 * format all package.json files (with cli command)
+* check if all packages are qualified to publish to npm (with cli command)
+* list all packages(requires `lerna` or `@changesets/cli`) (with cli command)
 * get all packages' meta info
-* get all changed packages' meta info
 * some other useful utilities
+
+**`lerna-ci` is designed for monorepo, but it can also be used in standard repo.**
 
 ## Install
 ```sh
@@ -56,6 +67,8 @@ yarn add lerna-ci -D
 npm install lerna-ci -D
 ```
 you may also install it to global if you use cli commands frequently(not recommended)
+
+Notice: **lerna-ci requires node `>=14.6`**
 
 ## Usage
 
@@ -76,40 +89,90 @@ yarn lerna-ci fixpack
 `lerna-ci` also provide some cli commands, so that you do some task with a single line code.
 
 ### synclocal
-sync versions of packages in monorepo, using [syncPackageVersions](#syncpackageversions) under the hood.
+sync versions of packages in monorepo, using [syncLocal](#synclocal-api) under the hood.
 
 ```sh
 # with yarn
-yarn lerna-ci synclocal [version source]
+yarn lerna-ci synclocal [source] [--check-only]
 
 # version source, determine where to get the packages' versions, could be: 
-#   git, npm, local, or all, default to local
+#   git, npm, local, or all, default all
+# if check-only is true, it will only check if packages' versions are synced, exit 1 if not synced
 
 # or if you prefer npm
-npx lerna-ci synclocal [version source]
+npx lerna-ci synclocal [source] [--check-only]
+
+# check for more options and examples
+yarn lerna-ci synclocal --help
+
+# demo
+yarn lerna-ci synclocal
 ```
 
-It's very useful when local packages versions are messed up, such as:
-1. publish a beta version inside a package without using lerna
-2. partial success when publish packages with lerna (you may use `yarn lerna-ci synclocal all` to fix it)
+It's very useful when local packages versions are messed up, this may lead to some unexpected errors, it can happens in some cases:
+1. publish a beta version inside a package without using lerna(or other monorepo tools)
+2. partial success when publish packages with lerna(or other monorepo tools), you may use `yarn lerna-ci synclocal all` to fix it
 
-You may need to run `yarn` or `npm install` to update lockfile.
+You may need to run `yarn` or `npm install` to make your changes take effect.
 
-### syncremote
-sync all packages' dependencies versions in monorepo, using [syncPackageDependenceVersion](#syncpackagedependenceversion) under the hood
+### syncdeps
+sync all packages' dependencies versions in monorepo, using [syncDeps](#syncdeps-api) under the hood.
+
+It will update following kinds of dependencies:
+* dependencies
+* devDependencies
+* optionalDependencies
+* peerDependencies
 
 ```sh
-# with yarn, must use quotes when specify scoped wildcard package name
-yarn lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/xxx*"> <"@scopedName2/*"> ... <"@scopedNameN/*"> 
+# with yarn
+yarn lerna-ci syncdeps <packageNames...> [--check-only]
+# packageNames could be a list of package names, or a list of package name with version range, such as: 
+#     "@babel/*" "@babel/core@^7.0.0" "parcel@^2.0.0" "rollup-plugin*"
+#     package name with asterisk(*) must be quoted
+# packageNames not found or not matched will be ignored
+# if check-only is true, it will check if any package's dependencies need be synced, exit 1 if found
 
 # or if you prefer npm, must use quotes when specify scoped wildcard package name
-npx lerna-ci syncremote <packageName1> <packageName2> ... <packageNameN> <"@scopedName1/xxx*"> <"@scopedName2/*"> ... <"@scopedNameN/*">
+npx lerna-ci syncdeps <packageNames...> [--check-only]
+
+# check for more options and examples
+yarn lerna-ci syncdeps --help
+
+# demo
+## sync all babel related packages' versions to `^7.0.0`, all packages that start with `eslint-plugin-` to latest, and react react-dom to `18.2.0`
+yarn lerna-ci syncdeps "@babel/*@^7.0.0" "eslint-plugin-*" react@18.2.0 react-dom@18.2.0
 ```
 
-You may need to run `yarn` or `npm install` to update lockfile.
+You may need to run `yarn` or `npm install` to make your changes take effect.
+
+### canpublish
+check if all packages are qualified to publish to npm, using [getChanged](#getChanged) under the hood if `lerna` or `@changesets/cli` is available, it will check:
+1. whether local has uncommitted changes when in git repo if `--check-git` is true
+2. whether local has conflicts when in git repo
+3. whether local is behind of remote when in git repo
+4. whether local packages' versions are synced with the latest version when `use-max-version` is true
+5. whether next versions(can be configured via `releaseType` and `period`) of local packages are occupied on npm and git
+
+it will exit 1 if any of the above conditions is satisfied
+
+
+```sh
+yarn lerna-ci canpublish [--releaseType=patch] [--period=alpha]
+# releaseType: patch, minor, major, prepatch, preminor, premajor, prerelease
+#              default patch
+# period: a string like alpha, beta, rc, etc, default alpha, only available when releaseType is pre*
+
+# check for more options and examples
+yarn lerna-ci canpublish --help
+
+# demo
+# check if all (changed) packages are qualified to publish a beta version in patch
+yarn lerna-ci canpublish --releaseType=patch --period=beta
+```
 
 ### fixpack
-format all packages' package.json, using [fixPackageJson](#fixpackagejson) under the hood
+format all packages' package.json, using [fixpack](#fixpack-api) under the hood
 
 ```sh
 # with yarn
@@ -120,6 +183,19 @@ npx lerna-ci fixpack
 ```
 above command will format all package.json files with default configuration, you can configure `fixpack`'s params via [configuration file](#configurationfile)
 
+### changed
+list all changed packages, using [getChanged](#getChanged) under the hood
+
+```sh
+# with yarn
+yarn lerna-ci changed
+
+# or if you prefer npm
+npx lerna-ci changed
+```
+above command requires package [`lerna`](https://www.npmjs.com/package/lerna) or [`@changesets/cli`](https://www.npmjs.com/package/@changesets/cli) to be installed,  or it will exit 1.
+
+You should configure `lerna` or `@changesets/cli` following their documentations and manage your packages under their official guidelines, or this command will not work as expected.
 
 ## API
 
@@ -171,113 +247,136 @@ export interface IPackageDigest {
   location: string
 }
 ```
-### syncPackageVersions
+### <a id="synclocal-api"></a> syncLocal
 sync versions of packages in monorepo(version info can be fetch from npm or git tag), if they depend each other and dependence version will be rematched.
 
 > also available as command [synclocal](#synclocal)
 
 e.g.
 ```js
-import { syncPackageVersions } from 'lerna-ci'
+import { syncLocal } from 'lerna-ci'
 // return all changed package infos
-const updatedPkgs = await syncPackageVersions({ versionSource: 'npm' })
+const updatedPkgs = await syncLocal({ versionSource: 'npm' })
 // [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
 ```
 
 Type Declarations:
 ```ts
-syncPackageVersions(options?: ISyncPackageOptions) => Promise<IPackageDigest[]>
+syncLocal(options?: ISyncPackageOptions) => Promise<IPackageDigest[]>
 
 
 export interface ISyncPackageOptions {
   /**
    * version source, default to `local`
-   *  how to get latest locale package versions: npm, git, local or all
+   * how to get latest locale package versions: npm, git, local or all
+   * @default 'all'
    */
-  versionSource?: 'npm' | 'git' | 'local' | 'all'
+  versionSource?: EVerSource
   /**
    * npm/git version strategy
-   *  default to 'latest', works only versionSource including `git` or `npm`
-   *    latest: last published version number
-   *    max: max version number sorted by semver
+   * @default 'latest'
    */
-  versionStrategy?: 'max' | 'latest'
+  versionStrategy?: IVersionPickStrategy
   /**
    * filter which package should be synced
-   *  same as the params of `getAllPackageDigests`
    */
   packageFilter?: IPackageFilterOptions
   /**
-   * version range strategy that will written to package.json's dependencies, default to '^'
+   * version range strategy
+   * @default 'retain'
    */
-  versionRangeStrategy?: IVersionRangeStrategy
+  versionRangeStrategy?: IUpgradeVersionStrategy
   /**
    * only check, with package.json files untouched
+   * validate package whether need to update, don't change package.json file actually
    */
   checkOnly?: boolean
+  /**
+   * check whether packages' versions are exactly same
+   */
+  exact?: boolean
 }
 
-export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | '=' | ((name: string, version: string) => string)
+/**
+ * upgrade version strategy
+ *  retain: retain the original version range
+ */
+export type IUpgradeVersionStrategy = '>' | '~' | '^' | '>=' | '' | 'retain' | IVerTransform
+
+/**
+ * custom version transform
+ */
+export type IVerTransform = (name: string, newVersion: string, oldVersion: string) => string
 
 ```
 
-Tips: you may need to reinstall your dependence via `yarn && yarn lerna bootstrap` or `npm install && npx lerna bootstrap` if anything changed
+Tips: you may need to reinstall your workspace dependence if anything changed
 
 
-### syncPackageDependenceVersion
+### <a id="syncdeps-api"></a> syncDeps
 sync packages dependencies(e.g. babel, react, typescript, etc) versions at once
 
-> also available as command [syncremote](#syncremote)
+> also available as command [syncdeps](#syncdeps)
 
 ```js
-import { syncPackageDependenceVersion } from 'lerna-ci'
+import { syncDeps } from 'lerna-ci'
 
 // update all packages that depend `react` and `react-dom` to their latest version(will fetch from npm)
 //  return all changed package infos(aka all packages that depend on these packageNames and be updated)
-const updatedPkgs = await syncPackageDependenceVersion({ packageNames: ['react', 'react-dom'] })
+const updatedPkgs = await syncDeps({ packageNames: ['react', 'react-dom'] })
 // [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
 
 // as above, but will also update dependence typescript to a fixed version 3.1.0 and parcel to ^2.0.0
-const updatedPkgs = await syncPackageDependenceVersion({ packageNames: ['react', 'react-dom'], versionMap: { typescript: '=3.1.0', parcel: '2.0.0' } })
+const updatedPkgs = await syncDeps({ packageNames: ['react', 'react-dom'], versionMap: { typescript: '=3.1.0', parcel: '2.0.0' } })
 // [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
 ```
 
 Type Declarations:
 ```ts
-syncPackageDependenceVersion(syncOptions: ISyncDepOptions)=> Promise<IPackageDigest[]>
+syncDeps(syncOptions: ISyncDepOptions)=> Promise<IPackageDigest[]>
 
 export interface ISyncDepOptions {
   /** 
    * package names that should update
    *  will fetch its version from npm by default
-   *  could be specified package name, or scoped wildcard package name(like @babel/preset-*, @parcel/*)
+   *  package name can use asterisk, e.g. @babel/*
+   * 
+   * @example
+   *  ['duplex-message', '@typescript-eslint/parser', '@babel/*', '*plugin*', 'react*']
    */
   packageNames?: string[]
   /**
    * version map<pkgName, version>
-   *  prefer use this as version source if provided
-   *  if packageNames also provided, will fetch unstated packages' version in versionMap
+   *  prefer use this as version map if provided
+   *  pkgName can be a pattern like @babel/*
+   *  if packageNames also provided, will fetch missing versions
+   * @example
+   * {'@babel/*': '7.0.0', 'parcel': '^2.0.0', '@types/react': '~18.0.0'}
    */
   versionMap?: IVersionMap
   /**
    * npm version strategy
-   *  default to 'latest'
-   *    latest: last published version number
-   *    max: max version number sorted by semver
+   *  default to 'max-stable'
    */
-  versionStrategy?: 'max' | 'latest'
+  versionPickStrategy?: IVersionPickStrategy
   /**
-   * version range strategy, use ^ by default
+   * version range strategy, use retain by default
    */
   versionRangeStrategy?: IVersionRangeStrategy
   /** only check, with package.json files untouched */
   checkOnly?: boolean
+  /**
+   * update version to the exact given version
+   *  set to false only update when existing version range is not satisfied
+   * @default true
+   */
+  exact?: boolean
 }
 ```
 
-Tips: you may need to reinstall your dependence via `yarn && yarn lerna bootstrap` or `npm install && npx lerna bootstrap` if anything changed
+Tips: you may need to reinstall your workspaces dependence if anything changed
 
-### fixPackageJson
+### <a id="fixpack-api"></a> fixpack
 Make all your package.json files are written in same criterion: sorting fields, validating required fields.
 This feature is powered by [fixpack](https://github.com/HenrikJoreteg/fixpack).
 
@@ -285,16 +384,16 @@ This feature is powered by [fixpack](https://github.com/HenrikJoreteg/fixpack).
 
 e.g.
 ```js
-import { fixPackageJson } from 'lerna-ci'
+import { fixpack } from 'lerna-ci'
 
-const updatedPkgs = await fixPackageJson()
+const updatedPkgs = await fixpack()
 // [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
 
 ```
 
 Type Declarations:
 ```ts
-fixPackageJson (options?: IFixPackOptions) => Promise<IPackageDigest[]>
+fixpack (options?: IFixPackOptions) => Promise<IPackageDigest[]>
 
 export interface IFixPackOptions {
   /**
@@ -310,102 +409,93 @@ export interface IFixPackOptions {
 }
 ```
 
-### getChangedPackages
-get local changed packages that will emit a new version
+### getChanged
+List all changed packages since last release, it requires package `lerna` or `@changesets/cli` to be installed.
+
+> also available as command [changed](#changed)
 
 e.g.
 ```js
-import { getChangedPackages } from 'lerna-ci'
-getChangedPackages().then(res => console.log(res))
+import { getChanged } from 'lerna-ci'
+
+const changedPkgs = await getChanged()
 // [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
+
 ```
 
 Type Declarations:
 ```ts
-getChangedPackages() => Promise<IPackageDigest[]>
+getChanged() => Promise<IPackageDigest[]>
+
 ```
+
 ### getRepoNpmClient
-get lerna preferred npm client, aka `npmClient` field's value in `lerna.json`
+get current monorepo preferred npm client
 
 e.g.
 ```js
 import { getRepoNpmClient } from 'lerna-ci'
 
 // will return npm for default if not specified
+//   get `yarn-next` when yarn version >= 2.0 found 
 getRepoNpmClient().then(client => console.log(client))
 // yarn
 ```
-
-### addRange2VersionMap
-convert fixed version number to ranged version number
-
-e.g.
-```js
-import { addRange2VersionMap } from 'lerna-ci'
-
-// default strategy is '^', version with custom range will be ignore
-const verMap = addRange2VersionMap({'lerna-ci': '1.0.2', 'parcel': '2.0', 'react': '>17.0.0'})
-// {'lerna-ci': '^1.0.2', 'parcel': '^2.0', 'react': '>17.0.0'}
-
-// use strategy '>='
-const verMap = addRange2VersionMap({'lerna-ci': '1.0.2', 'parcel': '2.0', 'react': '>17.0.0'}, '>=')
-// {'lerna-ci': '>=1.0.2', 'parcel': '>=2.0', 'react': '>17.0.0'}
-
-// use a custom function
-const verMap2 = addRange2VersionMap({'lerna-ci': '1.0.2', 'parcel': '2.0', 'react': '>17.0.0'}, (name, version) => {
-  // fix parcel version
-  if (name === 'parcel') return version
-  // remove custom range, prefix with ^
-  return `^${version.replace(/^[^\d]+/,'')}`
-})
-// {'lerna-ci': '^1.0.2', 'parcel': '2.0', 'react': '^17.0.0'}
-```
-
-Type Declarations:
-```ts
-addRange2VersionMap(versionMap: Record<string, string>, rangeStrategy?: IVersionRangeStrategy) => Record<string, string>
-
-export type IVersionRangeStrategy = '>' | '~' | '^' | '>=' | '<' | '<=' | '=' | ((name: string, version: string) => string)
-```
-
-### getSingleVersionFromNpm
+### getVersionFormRegistry
 get version from npm registry, you can get the latest version or the max version
 
 e.g.
 ```js
-import { getSingleVersionFromNpm } from 'lerna-ci'
+import { getVersionFormRegistry } from 'lerna-ci'
 
-getSingleVersionFromNpm('lerna-ci').then(ver => console.log(ver))
-// 1.0.2
+getVersionFormRegistry(options: IGetPkgVersionFromRegistryOptions) => Promise<string | undefined>
+
+export interface IGetPkgVersionFromRegistryOptions {
+  /** package name */
+  pkgName: string
+  /** strategy: latest or max */
+  versionStrategy?: IVersionPickStrategy
+  /**
+   * specified version, to check for existence
+   *  return itself if found, otherwise return empty string
+   */
+  version?: string
+  /**
+   * preferred npm client, auto detect if omitted
+   */
+  npmClient?: 'yarn' | 'yarn-next' | 'npm' | 'pnpm'
+}
 ```
+tips: if you want to fetch version from a npm mirror or custom registry, you should specify the mirror in the `.yarnrc` or `.npmrc` file
+
+### getVersionsFromRegistry
+batch version of `getVersionFormRegistry`, but return an object(key is package name, value is version)
+
 
 Type Declarations:
 ```ts
-// return undefined if not found
-// use getRepoNpmClient to get preferred npm client if npmClient not specified
-//   latest: last published version
-//   max: max version sorted in semver
-getSingleVersionFromNpm(pkgName: string, type: 'latest' | 'max' = 'latest', npmClient?: 'yarn' | 'npm') => Promise<string | undefined>
+getVersionsFromRegistry(options: IGetPkgVersionsFromRegistryOptions) => Promise<string | undefined>
+
+export interface IGetPkgVersionsFromRegistryOptions {
+  /**
+   * package names
+   */
+  pkgNames: string[]
+  /**
+   * version pick strategy
+   *  max: max package version
+   *  max-stable: max stable package version
+   *  latest: latest release package version
+   * @default max
+   */
+  versionStrategy?: 'max' | 'latest' | 'max-stable'
+  /**
+   * preferred npm client, detect automatically if not provided
+   */
+  npmClient?: 'yarn' | 'yarn-next' | 'npm' | 'pnpm'
+}
 ```
-tips: if you want to fetch version from a npm mirror, you should specify the mirror in the `.yarnrc` or `.npmrc` file
 
-### getVersionsFromNpm
-batch version of `getSingleVersionFromNpm`, but return an object(key is package name, value is version)
-
-e.g.
-```js
-import { getVersionsFromNpm } from 'lerna-ci'
-
-getVersionsFromNpm(['lerna-ci', 'react']).then(ver => console.log(ver))
-// {'lerna-ci': '1.0.2', react: '17.0.2'}
-```
-
-Type Declarations:
-```ts
-// if some package not found, then its key will be missing in the result
-// use getRepoNpmClient to get preferred npm client if npmClient not specified
-getVersionsFromNpm(pkgNames: string[], type: 'latest' | 'max' = 'latest', npmClient?: 'yarn' | 'npm') => Promise<Record<string, string>>
-```
 
 ### getPackageVersionsFromGit
 get monorepo package version map from git tag list(only tags in `packageName@versionNumber` like `react@1.0.0` will be recognized).  
@@ -436,6 +526,30 @@ isLernaAvailable().then(isInstalled => console.log(isInstalled))
 // true
 ```
 
+### getGitRoot
+get git root path of current repo
+
+e.g.
+```js
+import { getGitRoot } from 'lerna-ci'
+
+// return false if not in a git repo
+const maxVer = await getGitRoot()
+// /User/xx/work/monorepo
+```
+
+### getProjectRoot
+get current project's root path (which contains a `package.json` file)
+
+e.g.
+```js
+import { getProjectRoot } from 'lerna-ci'
+
+// throw error if not in a valid frontend project
+const maxVer = await getProjectRoot()
+// /User/xx/work/monorepo
+```
+
 ### maxVersion
 get max version(compare in semver) from a version list
 
@@ -448,7 +562,7 @@ const maxVer = maxVersion('0.1', '0.0.1', '1.0.0-alpha.1', '1.0.0')
 ```
 
 ### pickOne
-pick a value from a list with a custom method
+pick a value from a list with a custom compare method
 
 e.g.
 ```js
@@ -477,7 +591,7 @@ You may also add config for these commands via following ways(powered by [cosmic
 all these configurations should return an object with the following properties:
 * `synclocal`: same as the params of [syncPackageVersions](#syncpackageversions)
 * `syncremote`: same as the params of [syncPackageDependenceVersion](#syncpackagedependenceversion)
-* `fixpack`: same as the params of [fixPackageJson](#fixpackagejson)
+* `fixpack`: same as the params of [fixpack](#fixpack-api)
 
 
 ## Breaking changes

@@ -1,59 +1,83 @@
-import { maxVersion } from '../utils'
-import { getAllPackageDigests, IPackageFilterOptions} from '../pkg-info'
-import { IPackageDigest, IVersionMap, EVerSource } from '../types'
 import {
-  updatePkg,
-  getVersionsFromNpm,
+  maxVersion,
+  IPackageDigest,
+  IVersionMap,
+  EVerSource,
+  getAllPackageDigests,
+  IPackageFilterOptions,
+  updatePackageJSON,
+  getVersionsFromRegistry,
   getPackageVersionsFromGit,
-  addRange2VersionMap,
-  IVersionStrategy,
-  IVersionRangeStrategy
-} from './common'
+  IVersionPickStrategy,
+  IUpgradeVersionStrategy,
+  getVersionTransformer,
+  getGitRoot,
+  IChangedPackage
+} from '../common'
 
 export interface ISyncPackageOptions {
   /**
    * version source, default to `local`
    * how to get latest locale package versions: npm, git, local or all
+   * @default 'all'
    */
   versionSource?: EVerSource
   /**
    * npm/git version strategy
-   *  default to 'latest'
+   * @default 'latest'
    */
-  versionStrategy?: IVersionStrategy
+  versionStrategy?: IVersionPickStrategy
   /**
    * filter which package should be synced
    */
   packageFilter?: IPackageFilterOptions
   /**
-   * version range strategy 
+   * version range strategy
+   * @default 'retain'
    */
-  versionRangeStrategy?: IVersionRangeStrategy
+  versionRangeStrategy?: IUpgradeVersionStrategy
   /**
    * only check, with package.json files untouched
    * validate package whether need to update, don't change package.json file actually
    */
   checkOnly?: boolean
+  /**
+   * check whether packages' versions are exactly same
+   */
+  exact?: boolean
 }
 
 const DEFAULT_OPTIONS: ISyncPackageOptions = {
-  versionSource: EVerSource.LOCAL,
+  versionSource: EVerSource.ALL,
   versionStrategy: 'latest',
-  versionRangeStrategy: '^',
+  versionRangeStrategy: 'retain',
 }
 
 /**
  * sync all local packages' version
  *  return all packages' digest info that need to update (has been upated if isValidate is false)
  */
-export async function syncPackageVersions(syncOptions: ISyncPackageOptions = {}): Promise<IPackageDigest[]> {
+export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<IChangedPackage[] | false> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgs = await getAllPackageDigests(options.packageFilter)
+  if (!allPkgs.length) {
+    throw new Error('no packages found in current project')
+  }
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const latestVersions = await getLatestVersions(options.versionSource!, allPkgs, options.versionStrategy)
-  const caretVersions =  addRange2VersionMap(latestVersions, options.versionRangeStrategy)
-  const pkgsUpdated = allPkgs.filter(item => updatePkg(item, caretVersions , options.checkOnly, latestVersions[item.name]))
-  return pkgsUpdated
+  const pkgsUpdated = allPkgs.map(item => {
+    const changes = updatePackageJSON({
+      pkgDigest: item,
+      latestVersions,
+      versionTransform: getVersionTransformer(options.versionRangeStrategy),
+      checkOnly: options.checkOnly,
+      pkgVersion: latestVersions[item.name],
+      exact: options.exact
+    })
+    return changes && Object.assign({}, item, { changes })
+  }).filter(Boolean)
+  // @ts-ignore
+  return !!pkgsUpdated.length && pkgsUpdated
 }
 
 /**
@@ -64,9 +88,8 @@ export async function syncPackageVersions(syncOptions: ISyncPackageOptions = {})
 async function getLatestVersions(
   verSource: EVerSource,
   pkgs: IPackageDigest[],
-  versionStrategy?: IVersionStrategy
+  versionStrategy?: IVersionPickStrategy
 ) {
-  if (!pkgs.length) return {}
   // local package versions
   const localVers: IVersionMap = {}
   pkgs.reduce((acc, cur) => {
@@ -79,13 +102,16 @@ async function getLatestVersions(
   let npmVers: IVersionMap = {}
   if (verSource !== EVerSource.GIT) {
     // can not get version from private package
-    npmVers = await getVersionsFromNpm(pkgs.filter(p => !p.private).map(item => item.name), versionStrategy)
+    npmVers = await getVersionsFromRegistry({ pkgNames: pkgs.filter(p => !p.private).map(item => item.name), versionStrategy })
   }
 
   // versions info from git
   let gitVers: IVersionMap = {}
   if (verSource !== EVerSource.NPM) {
-    gitVers = await getPackageVersionsFromGit(versionStrategy)
+    const gitRoot = await getGitRoot()
+    if (gitRoot) {
+      gitVers = await getPackageVersionsFromGit(versionStrategy)
+    }
   }
 
   const vers: IVersionMap = {}

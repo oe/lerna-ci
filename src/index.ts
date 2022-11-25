@@ -1,6 +1,7 @@
-export * from './types'
-export * from './sync-version'
-export * from './utils'
-export * from './pkg-info'
+export * from './common'
+export * from './sync-local'
+export * from './common'
+export * from './sync-deps'
 export * from './fixpack-all'
-
+export * from './can-publish'
+export * from './changed'
