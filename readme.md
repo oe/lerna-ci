@@ -96,7 +96,7 @@ sync versions of packages in monorepo, using [syncLocal](#synclocal-api) under t
 yarn lerna-ci synclocal [source] [--check-only]
 
 # version source, determine where to get the packages' versions, could be: 
-#   git, npm, local, or all, default all
+#   git, npm, local, or all, default local
 # if check-only is true, it will only check if packages' versions are synced, exit 1 if not synced
 
 # or if you prefer npm

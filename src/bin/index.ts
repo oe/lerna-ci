@@ -121,7 +121,7 @@ yargs(hideBin(process.argv))
         : 'try to sync local packages\' versions'
 
       console.log(`[${CLI_NAME}][${cmdName}] ${cliMessage}`)
-      const source = argv.source || repoConfig.synclocal?.source || 'all'
+      const source = argv.source || repoConfig.synclocal?.source || 'local'
       const versionRange = argv.range || repoConfig.synclocal?.versionRange
       const options = {
         versionSource: source,
