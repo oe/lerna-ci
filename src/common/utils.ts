@@ -1,7 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 import semver from 'semver'
-import { runShellCmd, findFileRecursive } from 'deploy-toolkit'
+import child_process, { type SpawnOptions } from 'child_process'
 import { IPackageDigest } from './types'
 
 /**
@@ -11,6 +11,88 @@ export const  PKG_DEP_KEYS = <const>['dependencies', 'devDependencies', 'peerDep
 
 /** platform detect */
 export const isWin = /^win/.test(process.platform)
+
+
+/**
+ * run local shell command with spawn
+ *  resolve with command exec outputs if cmd return 0, or reject with error message
+ * @param  {String} cmd     cmd name
+ * @param  {Array<String>} args    args list
+ * @param  {Object} options spawn cmd options, cwd is vital
+ */
+export function runShellCmd (cmd: string, options?: SpawnOptions): Promise<string>
+export function runShellCmd (cmd: string, args?: string[], options?: SpawnOptions): Promise<string>
+export function runShellCmd (cmd: string, args?: string[] | SpawnOptions, options?: SpawnOptions) {
+  if (!Array.isArray(args)) {
+    options = args
+    args = []
+  }
+  const task = child_process.spawn(
+    cmd,
+    // @ts-ignore
+    args,
+    Object.assign(
+      {
+        cwd: process.cwd(),
+        shell: true
+      },
+      options
+    )
+  )
+
+  return new Promise<string>((resolve, reject) => {
+    // record response content
+    const stdout: (string | Buffer)[] = []
+    const stderr: (string | Buffer)[] = []
+    task.stdout!.on('data', data => {
+      stdout.push(data)
+    })
+    task.stderr!.on('data', data => {
+      stderr.push(data)
+    })
+
+    // listen on error, to aviod command crash
+    task.on('error', () => {
+      reject(stderr.join('').toString())
+    })
+
+    task.on('exit', code => {
+      if (code) {
+        stderr.unshift(`error code: ${code}\n`)
+        reject(stderr.join('').toString())
+      } else {
+        resolve(stdout.join('').toString())
+      }
+    })
+  })
+}
+
+/**
+ * find a file(dir) recursive( aka try to find package.json, node_modules, etc.)
+ * @param fileName file name(or dir name if isDir is true)
+ * @param dir the initial dir path to find, use `process.cwd()` by default
+ * @param isDir whether to find a dir
+ */
+export function findFileRecursive (fileName: string | string[], dir = process.cwd(), isDir = false): string {
+  // const filepath = path.join(dir, fileName)
+  const fileNames = Array.isArray(fileName) ? fileName : [fileName]
+  let f: string | undefined = ''
+  // tslint:disable-next-line:no-conditional-assignment
+  while ((f = fileNames.shift())) {
+    const filepath = path.join(dir, f)
+    try {
+      const stat = fs.statSync(filepath)
+      const isFound = isDir ? stat.isDirectory() : stat.isFile()
+      if (isFound) return filepath
+    } catch (e) {
+      // xxx
+    }
+  }
+  // has reach the top root
+  const parentDir = path.dirname(dir)
+  if (parentDir === dir) return ''
+  return findFileRecursive(fileName, parentDir, isDir)
+}
 
 /** run npm command via npx */
 export async function runNpmCmd(...args: string[]) {

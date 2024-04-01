@@ -1,9 +1,8 @@
 import path from 'path'
 import fs from 'fs'
-import { runShellCmd } from 'deploy-toolkit'
 import findPkgs from 'find-packages'
 import { IPackageDigest } from '../types'
-import { getProjectRoot, readPackageJson, readRootPkgJson } from '../utils'
+import { getProjectRoot, readPackageJson, readRootPkgJson, runShellCmd } from '../utils'
 import { getRepoNpmClient } from '../get-package-version/npm'
 /**
  * get all package's info in a lerna project

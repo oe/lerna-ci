@@ -1,6 +1,6 @@
-import { runShellCmd } from 'deploy-toolkit'
+
 import { IVersionPickStrategy, IVersionMap } from '../types'
-import { maxVersion, syncPruneGitTags } from '../utils'
+import { runShellCmd, maxVersion, syncPruneGitTags } from '../utils'
 /**
  * get package version from git tags
  */

@@ -1,5 +1,4 @@
 import semver from 'semver'
-import { runShellCmd } from 'deploy-toolkit'
 import {
   getAllPackageDigests,
   EVerSource,
@@ -10,6 +9,7 @@ import {
   getVersionFormRegistry,
   logger,
   IChangedPackage,
+  runShellCmd,
 } from '../common'
 import { syncLocal } from '../sync-local'
 import { getChanged } from '../changed'
