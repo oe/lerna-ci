@@ -1,4 +1,4 @@
-import { runShellCmd } from 'deploy-toolkit'
+import { runShellCmd } from '../../utils'
 import { IGetPkgVersionFromRegistry, getMaxStableVersion } from './common'
 
 /**

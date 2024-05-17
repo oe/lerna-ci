@@ -1,8 +1,7 @@
 import fs from 'fs'
 import path from 'path'
-import { runShellCmd } from 'deploy-toolkit'
 import { IPackageDigest } from '../types'
-import { getProjectRoot, isWin, runNpmCmd } from '../utils'
+import { getProjectRoot, isWin, runNpmCmd, runShellCmd } from '../utils'
 
 /**
  * get all package's info in a lerna project
