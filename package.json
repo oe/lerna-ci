@@ -12,6 +12,7 @@
     "clean": "rimraf ./dist",
     "prebuild": "yarn run lint && yarn run clean",
     "build": "tsc && chmod +x dist/bin/index.js",
+    "prepublish": "yarn run build",
     "lint-message": "echo 'lint code before commit'",
     "lint": "eslint './src/**/*.{ts,tsx}'",
     "release": "yarn build && yarn publish"
