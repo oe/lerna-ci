@@ -8,7 +8,7 @@ import * as npm from './npm'
 import * as yarn from './yarn'
 import * as yarnNext from './yarn-next'
 
-export const SUPPORTED_NPM_CLIENTS = <const>['yarn', 'yarn-next', 'npm', 'pnpm'] 
+export const SUPPORTED_NPM_CLIENTS = ['yarn', 'yarn-next', 'npm', 'pnpm'] as const
 
 export type INpmClient =  typeof SUPPORTED_NPM_CLIENTS[number]
 
@@ -77,11 +77,11 @@ export async function getVersionFormRegistry(
 }
 
 
-let repoNpmClient: string | undefined
+let repoNpmClient: INpmClient | undefined
 /**
  * get lerna monorepo preferred npm client
  */
-export async function getRepoNpmClient(): Promise<string> {
+export async function getRepoNpmClient(): Promise<INpmClient> {
   if (typeof repoNpmClient !== 'undefined') return repoNpmClient
   let client = await try2ReadPkg()
   if (client === false) {
@@ -130,15 +130,9 @@ async function try2ReadPkg() {
 async function try2ReadClientCfg() {
   const rootDir = await getProjectRoot()
   const files = await fs.promises.readdir(rootDir, { withFileTypes: true })
-  for (let index = 0; index < files.length; index++) {
-    const file = files[index]
-    if (file.isFile()) {
-      if (/^\.yarnrc\./.test(file.name) || file.name === 'yarn.lock') return 'yarn'
-      if (/^\.npmrc\./.test(file.name) || file.name === 'package-lock.json') return 'npm'
-      if (/^pnpm-workspace\./.test(file.name)
-        || /^\.pnpmfile\./.test(file.name)
-        || file.name === 'pnpm-lock.yaml') return 'pnpm'
-    }
-  }
+  const fileNames = files.filter(f => f.isFile()).map(f => f.name)
+  if (fileNames.includes('yarn.lock')) return 'yarn'
+  if (fileNames.includes('pnpm-lock.yaml')) return 'pnpm'
+  if (fileNames.includes('package-lock.json')) return 'npm'
   return false
 }
