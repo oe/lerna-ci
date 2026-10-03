@@ -11,8 +11,11 @@ import {
   IVersionMap,
   getAllDependencies,
   IChangedPackage,
+  getProjectRoot,
+  getRepoNpmClient,
   logger,
 } from '../common'
+import { getCatalogPackageNames, planCatalogUpdates, readPnpmCatalogs, validateCatalogReferences } from '../common/pnpm-catalogs'
 
 export interface ISyncDepOptions {
   /**
@@ -42,7 +45,7 @@ export interface ISyncDepOptions {
    * version range strategy, use retain by default
    */
   versionRangeStrategy?: IVersionRangeStrategy
-  /** only check, with package.json files untouched */
+  /** only check, with package.json and pnpm-workspace.yaml files untouched */
   checkOnly?: boolean
   /**
    * update version to the exact given version
@@ -65,11 +68,15 @@ const DEFAULT_OPTIONS: ISyncDepOptions = {
  */
 export async function syncDeps(syncOptions: ISyncDepOptions): Promise<IChangedPackage[] | false> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
-  const allPkgDigests = await getAllPackageDigests()
+  const rootPath = await getProjectRoot()
+  const isPnpm = await getRepoNpmClient(rootPath) === 'pnpm'
+  const catalogs = isPnpm ? await readPnpmCatalogs(rootPath) : undefined
+  const allPkgDigests = await getAllPackageDigests(undefined, rootPath)
+  if (isPnpm) validateCatalogReferences(catalogs, allPkgDigests)
 
   let versionMap = options.versionMap!
   if (Array.isArray(options.packageNames) && options.packageNames.length) {
-    const packageNames = flatPackageNames(options.packageNames, allPkgDigests)
+    const packageNames = flatPackageNames(options.packageNames, allPkgDigests, getCatalogPackageNames(catalogs))
     const pkgsHasVersion = Object.keys(versionMap)
     const pkgsWithoutVersion = packageNames.filter(n => !pkgsHasVersion.some(pattern => isPkgNameMatchingPattern(n, pattern)))
     if (pkgsWithoutVersion.length) {
@@ -82,17 +89,25 @@ export async function syncDeps(syncOptions: ISyncDepOptions): Promise<IChangedPa
     logger.warn('[lerna-ci] no package names provided, nothing touched')
     return false
   }
-  const pkgsUpdated = allPkgDigests.map(item => {
+  const versionTransform = getVersionTransformer(options.versionRangeStrategy)
+  const catalogUpdate = planCatalogUpdates(catalogs, versionMap, versionTransform, options.exact)
+  const manifestTransform = isPnpm
+    ? (name: string, oldVersion: string, newVersion: string) => oldVersion.startsWith('catalog:') ? oldVersion : versionTransform(name, oldVersion, newVersion)
+    : versionTransform
+  const pkgsUpdated = allPkgDigests.map((item): IChangedPackage | false => {
     const changes = updatePackageJSON({
       pkgDigest: item,
       latestVersions: versionMap,
-      versionTransform: getVersionTransformer(options.versionRangeStrategy),
+      versionTransform: manifestTransform,
       checkOnly: options.checkOnly,
       exact: options.exact,
     })
     return changes && Object.assign({}, item, { changes })
-  }).filter(Boolean)
-  // @ts-ignore
+  }).filter((item): item is IChangedPackage => !!item)
+  if (catalogUpdate) {
+    if (!options.checkOnly) catalogUpdate.write()
+    pkgsUpdated.push(catalogUpdate.change)
+  }
   return !!pkgsUpdated.length && pkgsUpdated
 }
 
@@ -101,7 +116,7 @@ export async function syncDeps(syncOptions: ISyncDepOptions): Promise<IChangedPa
  * @param packageNames package names that should update
  * @param allPkgDigests all mono packages' digest info
  */
-function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[]) {
+function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[], catalogNames: string[]) {
   const scopedNames:string[] = []
   const normalNames:string[] = []
   packageNames.forEach(name => {
@@ -112,7 +127,7 @@ function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[
     }
   })
   if (!scopedNames.length) return packageNames
-  const allPackageNames = getAllDependencies(allPkgDigests)
+  const allPackageNames = Array.from(new Set([...getAllDependencies(allPkgDigests), ...catalogNames]))
   const scopedPkgNames = allPackageNames.filter(name => scopedNames.some(scope => isPkgNameMatchingPattern(name, scope)))
   logger.info(`[lerna-ci] found ${scopedPkgNames.length} scoped packages with patterns ${scopedNames.join(', ')}`)
   if (scopedPkgNames.length) {

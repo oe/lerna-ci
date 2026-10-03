@@ -26,8 +26,8 @@ export type IPackageFilterOptions = IPackageFilterObject | IPackageFilter
 /**
  * get all package's info in a lerna project
  */
-export async function getAllPackageDigests(filter?: IPackageFilterOptions): Promise<IPackageDigest[]> {
-  const result = await getAllPkgDigests()
+export async function getAllPackageDigests(filter?: IPackageFilterOptions, rootPath?: string): Promise<IPackageDigest[]> {
+  const result = await getAllPkgDigests(rootPath)
   if (!filter) return result
   if (typeof filter === 'object') {
     const filterOptions = filter
@@ -41,8 +41,8 @@ export async function getAllPackageDigests(filter?: IPackageFilterOptions): Prom
   return result.filter(filter)
 }
 
-async function getAllPkgDigests() {
-  const rootPath = await getProjectRoot()
+async function getAllPkgDigests(rootPath?: string) {
+  rootPath = rootPath || await getProjectRoot()
   let result = await lerna.getAllPackages(rootPath)
   if (result === false) {
     result = await native.getAllPackages(rootPath)

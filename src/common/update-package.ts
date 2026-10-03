@@ -158,7 +158,7 @@ interface IUpdateDepsVersionOptions {
  * @param deps original deps object
  * @param versions latest package versions
  */
-function updateDepsVersion({ dependencies, versions, versionTransform, exact }:  IUpdateDepsVersionOptions): IChangedPkg[] | false {
+export function updateDepsVersion({ dependencies, versions, versionTransform, exact }:  IUpdateDepsVersionOptions): IChangedPkg[] | false {
   let hasChanged = false
   if (!dependencies) return hasChanged
   const changed: IChangedPkg[] = []

@@ -615,6 +615,7 @@ pnpm dev:build      # Vite watch mode
 pnpm typecheck     # source and tooling configuration types
 pnpm test          # lint, tooling types, build, offline regressions
 pnpm test:package  # pack, isolated consumer, imports, CLI, public types
+pnpm test:catalog  # real pnpm catalogs, frozen install, and publishing conversion
 ```
 
 Vite preserves the existing `dist/index.js`, `dist/index.d.ts`, CLI entry point,
@@ -648,6 +649,53 @@ The `--exact false` option preserves an existing dependency range when it contai
 the target version or target range. Explicit range strategies such as `--range '~'`
 also apply to existing caret and tilde dependencies. Protocols such as `workspace:*`,
 `file:`, and npm aliases are preserved.
+
+### pnpm catalogs
+
+Catalog support is automatic when the project uses pnpm and defines or references
+catalogs. The package manager is detected from `packageManager`, with
+`pnpm-workspace.yaml` as a fallback when that field is absent. npm and Yarn do not
+read or update pnpm catalogs, and ordinary dependencies keep their existing behavior.
+
+`syncDeps` updates matching entries in `catalog`, `catalogs.default`, and named
+`catalogs` in `pnpm-workspace.yaml`. It preserves `catalog:`, `catalog:default`, and
+`catalog:name` in all four dependency fields. Wildcard package targets include
+catalog-only entries, including entries used by `overrides`; each package version
+is fetched once. A target applies to matching entries across all catalogs, so use
+care when maintaining separate major versions in named catalogs.
+
+```yaml
+# pnpm-workspace.yaml
+packages:
+  - packages/*
+catalog:
+  react: ^18.3.1
+catalogs:
+  next:
+    react: ~18.3.1
+```
+
+With `"react": "catalog:"` or `"react": "catalog:next"` in package manifests,
+`lerna-ci syncdeps react@19.0.0` changes those YAML ranges to `^19.0.0` and
+`~19.0.0` while leaving the manifest references untouched. `--exact false` checks
+the catalog's range; `--range` and custom API transforms apply to its actual value.
+`syncLocal` also updates catalog semver ranges for selected local package names.
+Newer pnpm catalog values using `workspace:`, `file:`, or `link:` are preserved
+by the built-in range strategies.
+
+`--check-only` reports catalog changes and exits 1 when updates are needed, without
+writing either file. API results include a `pnpm-workspace.yaml` item with fields
+such as `catalog` or `catalogs.next`. Updates preserve comments, quoting, line
+endings, and unrelated settings such as `catalogMode` and catalog cleanup options.
+Missing entries, duplicate default definitions, recursive references and invalid
+YAML fail before writing. Automatic edits require direct, single-line YAML scalar
+values; anchors, aliases, merges and block scalars that need updating raise an
+explicit error to avoid changing shared configuration. Catalogs are shared across
+the workspace, so local package filters cannot restrict who consumes an updated entry.
+
+Run `pnpm install` after synchronization to refresh `pnpm-lock.yaml`, as with
+ordinary dependency updates. Integration tests exercise real pnpm 10 and the
+current latest release, including frozen installation and `pnpm pack` conversion.
 
 `canpublish` blocks unresolved Git conflicts even with `--check-git false`, compares
 upstream revision counts independently of Git's display language, and stops if the

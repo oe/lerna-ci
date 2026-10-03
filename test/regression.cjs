@@ -45,6 +45,23 @@ function update(dir, oldVersion, newVersion, options = {}) {
   })
 }
 
+async function catalogFixture(content, manifests, run) {
+  return fixture(async dir => {
+    const file = path.join(dir, 'pnpm-workspace.yaml')
+    fs.writeFileSync(file, content)
+    for (const [location, manifest] of Object.entries(manifests)) write(path.join(dir, location), manifest)
+    const original = utils.runShellCmd
+    await patch(utils, 'runShellCmd', async (cmd, args, options) => {
+      if (cmd === 'pnpm' && args[0] === 'm' && args[1] === 'ls') {
+        return JSON.stringify(Object.keys(manifests).concat('.').map(location => ({
+          ...JSON.parse(fs.readFileSync(path.join(dir, location, 'package.json'))), path: path.join(dir, location),
+        })))
+      }
+      return original(cmd, args, options)
+    }, () => run(dir, file))
+  }, { name: 'root', version: '1.0.0', private: true, packageManager: 'pnpm@10.34.6' })
+}
+
 test('keyword and private filters select only the requested workspace packages', () => fixture(async dir => {
   write(path.join(dir, 'packages/a'), { name: '@app/a', version: '1.0.0' })
   write(path.join(dir, 'packages/b'), { name: '@app/b', version: '1.0.0', private: true })
@@ -409,6 +426,174 @@ test('fixpack preserves formatting options and supports dry-run without writing'
   assert.deepStrictEqual(Object.keys(formatted.dependencies), ['a', 'z'])
   assert.deepStrictEqual(await api.fixpack({ config: { ...config, quiet: true } }), [])
 }))
+
+test('catalog synchronization is automatic and preserves references, comments, quotes and CRLF', () => {
+  const content = [
+    '# workspace settings', 'packages: ["packages/*"]', 'catalogMode: strict', 'cleanupUnusedCatalogs: false',
+    'catalog:', '  react: "^1.0.0" # shared default', 'catalogs:', '  legacy:', "    react: '~1.0.0' # named catalog",
+    'overrides:', '  react: catalog:default', '',
+  ].join('\r\n')
+  const manifest = { name: 'app', version: '1.0.0', dependencies: { react: 'catalog:' }, devDependencies: { react: 'catalog:default' },
+    peerDependencies: { react: 'catalog:legacy' }, optionalDependencies: { react: 'catalog: legacy ' } }
+  return catalogFixture(content, { 'packages/app': manifest }, async (dir, file) => {
+    const packageFile = path.join(dir, 'packages/app/package.json')
+    const before = fs.readFileSync(packageFile, 'utf8')
+    const options = { versionMap: { react: '2.0.0' } }
+    const planned = await api.syncDeps({ ...options, checkOnly: true })
+    assert.strictEqual(planned.length, 1)
+    assert.strictEqual(planned[0].name, 'pnpm-workspace.yaml')
+    assert.deepStrictEqual(planned[0].changes.map(change => change.field), ['catalog', 'catalogs.legacy'])
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), content)
+    assert.strictEqual(fs.readFileSync(packageFile, 'utf8'), before)
+    assert.deepStrictEqual(await api.syncDeps(options), planned)
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), content.replace('^1.0.0', '^2.0.0').replace('~1.0.0', '~2.0.0'))
+    assert.strictEqual(fs.readFileSync(packageFile, 'utf8'), before)
+    assert.strictEqual(await api.syncDeps(options), false)
+  })
+})
+
+test('catalogs.default supports both default references and refreshes values on every call', () => catalogFixture(
+  'packages: [packages/*]\ncatalogs:\n  default: {react: ^1.0.0}\n',
+  { 'packages/app': { name: 'app', dependencies: { react: 'catalog:' }, devDependencies: { react: 'catalog:default' } } },
+  async (_dir, file) => {
+    await api.syncDeps({ versionMap: { react: '2.0.0' }, versionRangeStrategy: '~' })
+    assert.match(fs.readFileSync(file, 'utf8'), /react: ~2\.0\.0/)
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('~2.0.0', '^1.0.0'))
+    await api.syncDeps({ versionMap: { react: '3.0.0' } })
+    assert.match(fs.readFileSync(file, 'utf8'), /react: \^3\.0\.0/)
+  }
+))
+
+test('catalog exact=false checks the resolved range and preserves satisfying ranges', () => catalogFixture(
+  'packages: [packages/*]\ncatalog: {react: ^1.0.0}\n',
+  { 'packages/app': { name: 'app', dependencies: { react: 'catalog:' } } },
+  async (_dir, file) => {
+    const before = fs.readFileSync(file, 'utf8')
+    assert.strictEqual(await api.syncDeps({ versionMap: { react: '^1.5.0' }, exact: false }), false)
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), before)
+    await api.syncDeps({ versionMap: { react: '2.0.0' }, exact: false })
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), before.replace('^1.0.0', '^2.0.0'))
+  }
+))
+
+test('custom transforms receive catalog ranges and never rewrite catalog references', () => catalogFixture(
+  'packages: [packages/*]\ncatalog: {react: ^1.0.0}\n',
+  { 'packages/app': { name: 'app', dependencies: { react: 'catalog:' } } },
+  async (dir, file) => {
+    const calls = []
+    const versionRangeStrategy = (...args) => { calls.push(args); return '~2.0.0' }
+    await api.syncDeps({ versionMap: { react: '2.0.0' }, versionRangeStrategy })
+    assert.deepStrictEqual(calls, [['react', '^1.0.0', '2.0.0']])
+    assert.match(fs.readFileSync(file, 'utf8'), /react: ~2\.0\.0/)
+    const location = path.join(dir, 'packages/app')
+    assert.strictEqual(api.updatePackageJSON({ pkgDigest: { location }, latestVersions: { react: '3.0.0' }, versionTransform: api.getVersionTransformer('retain') }), false)
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(location, 'package.json'))).dependencies.react, 'catalog:')
+  }
+))
+
+test('syncLocal updates semver catalog entries and preserves newer pnpm workspace and local protocols', () => catalogFixture(
+  'packages: [packages/*]\ncatalog:\n  "@app/a": ^1.0.0\ncatalogs:\n  linked:\n    "@app/a": workspace:^\n  local:\n    "@app/a": file:./packages/a\n  symlink:\n    "@app/a": link:./packages/a\n',
+  { 'packages/a': { name: '@app/a', version: '2.0.0' }, 'packages/b': { name: '@app/b', version: '1.0.0', dependencies: { '@app/a': 'catalog:' },
+    devDependencies: { '@app/a': 'catalog:linked' }, optionalDependencies: { '@app/a': 'catalog:local' }, peerDependencies: { '@app/a': 'catalog:symlink' } } },
+  async (dir, file) => {
+    const before = fs.readFileSync(file, 'utf8')
+    assert.strictEqual((await api.syncLocal({ checkOnly: true })).length, 1)
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), before)
+    await api.syncLocal()
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), before.replace('^1.0.0', '^2.0.0'))
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'packages/b/package.json'))).dependencies['@app/a'], 'catalog:')
+  }
+))
+
+test('wildcard registry targets include catalog-only and override-only entries without duplicate requests', () => catalogFixture(
+  'packages: [packages/*]\ncatalog: {"@scope/a": ^1.0.0, "@scope/b": ~1.0.0}\ncatalogs:\n  named: {"@scope/a": ^1.0.0}\noverrides:\n  "parent@>1>@scope/b@^1": "catalog:"\n',
+  { 'packages/app': { name: 'app', dependencies: { '@scope/a': 'catalog:' } } },
+  async (_dir, file) => {
+    const original = utils.runShellCmd
+    const names = []
+    await patch(utils, 'runShellCmd', async (cmd, args, options) => {
+      if (args[0] === 'info') { names.push(args[1]); return JSON.stringify('2.0.0') }
+      return original(cmd, args, options)
+    }, async () => {
+      await api.syncDeps({ packageNames: ['@scope/*'] })
+      assert.deepStrictEqual(names.sort(), ['@scope/a', '@scope/b'])
+      assert.strictEqual((fs.readFileSync(file, 'utf8').match(/2\.0\.0/g) || []).length, 3)
+    })
+  }
+))
+
+test('pnpm workspace roots are found from package subdirectories without Git or packageManager', () => catalogFixture(
+  'packages: [packages/*]\ncatalog: {react: ^1.0.0}\n',
+  { 'packages/app': { name: 'app', dependencies: { react: 'catalog:' } } },
+  async (dir, file) => {
+    write(dir, { name: 'root', private: true })
+    process.chdir(path.join(dir, 'packages/app'))
+    assert.strictEqual(await api.getProjectRoot(), dir)
+    assert.strictEqual(await api.getRepoNpmClient(), 'pnpm')
+    await api.syncDeps({ versionMap: { react: '2.0.0' } })
+    assert.match(fs.readFileSync(file, 'utf8'), /react: \^2\.0\.0/)
+  }
+))
+
+for (const [label, content, dependencies, error] of [
+  ['missing entry', 'catalog: {vue: ^1.0.0}', { react: 'catalog:' }, /No catalog entry react/],
+  ['missing named catalog', 'catalog: {react: ^1.0.0}', { react: 'catalog:missing' }, /catalog missing/],
+  ['duplicate default', 'catalog: {react: ^1.0.0}\ncatalogs: {default: {react: ^1.0.0}}', {}, /defined twice/],
+  ['recursive catalog', 'catalog: {react: "catalog:other"}', {}, /recursively references/],
+  ['non-string entry', 'catalog: {react: 1}', {}, /expected a string/],
+  ['invalid YAML', 'catalog: {react:', {}, /Invalid/],
+  ['missing override entry', 'catalog: {react: ^1.0.0}\noverrides: {vue: "catalog:"}', {}, /No catalog entry vue/],
+  ['shared YAML anchor', 'catalog: {react: &shared ^1.0.0}\notherSetting: *shared', {}, /Cannot safely update/],
+  ['shared catalog mapping', 'catalog: &shared {react: ^1.0.0}\notherSetting: *shared', {}, /Cannot safely update/],
+  ['merged catalog mapping', 'versions: &shared {react: ^1.0.0}\ncatalog: {<<: *shared}', {}, /Cannot safely update/],
+  ['block scalar entry', 'catalog:\n  react: >-\n    ^1.0.0\notherSetting: keep', {}, /Cannot safely update/],
+]) {
+  test(`invalid catalog (${label}) is reported before any files are written`, () => catalogFixture(
+    `packages: [packages/*]\n${content}\n`,
+    { 'packages/app': { name: 'app', dependencies: { direct: '^1.0.0', ...dependencies } } },
+    async (dir, file) => {
+      const packageFile = path.join(dir, 'packages/app/package.json')
+      const before = fs.readFileSync(packageFile, 'utf8')
+      const workspaceBefore = fs.readFileSync(file, 'utf8')
+      await assert.rejects(api.syncDeps({ versionMap: { direct: '2.0.0', react: '2.0.0' } }), error)
+      assert.strictEqual(fs.readFileSync(packageFile, 'utf8'), before)
+      assert.strictEqual(fs.readFileSync(file, 'utf8'), workspaceBefore)
+    }
+  ))
+}
+
+test('pnpm without catalogs retains ordinary dependency synchronization by default', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, packageManager: 'pnpm@10.34.6', workspaces: ['packages/*'], dependencies: { react: '^1.0.0' } })
+  assert.strictEqual((await api.syncDeps({ versionMap: { react: '2.0.0' } })).length, 1)
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).dependencies.react, '^2.0.0')
+  assert.strictEqual(fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')), false)
+}))
+
+test('a dangling pnpm catalog reference without a workspace file fails before writing', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, packageManager: 'pnpm@10.34.6', dependencies: { react: 'catalog:', direct: '^1.0.0' } })
+  const before = fs.readFileSync(path.join(dir, 'package.json'), 'utf8')
+  await assert.rejects(api.syncDeps({ versionMap: { direct: '2.0.0' } }), /No catalog entry react/)
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), before)
+}))
+
+for (const packageManager of ['npm@10.0.0', 'yarn@1.22.22']) {
+  test(`${packageManager} ignores pnpm catalog settings and retains ordinary sync behavior`, () => fixture(async dir => {
+    write(dir, { name: 'root', private: true, packageManager, workspaces: ['packages/*'], dependencies: { react: '^1.0.0' } })
+    const file = path.join(dir, 'pnpm-workspace.yaml')
+    const content = 'catalog: [invalid, ignored]\n'
+    fs.writeFileSync(file, content)
+    const original = utils.runShellCmd
+    await patch(utils, 'runShellCmd', async (cmd, args, options) => {
+      assert.notStrictEqual(cmd, 'pnpm')
+      if (cmd === 'yarn') return args[0] === '--version' ? '1.22.22' : '{}'
+      return original(cmd, args, options)
+    }, async () => {
+      await api.syncDeps({ versionMap: { react: '2.0.0' } })
+      assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).dependencies.react, '^2.0.0')
+      assert.strictEqual(fs.readFileSync(file, 'utf8'), content)
+    })
+  }))
+}
 
 ;(async () => {
   let failed = 0

@@ -18,7 +18,8 @@
     "test": "pnpm run lint && tsc -p tsconfig.tools.json && pnpm run build && node test/regression.cjs",
     "test:regression": "node test/regression.cjs",
     "release": "pnpm publish",
-    "test:package": "pnpm pack --out pack.tgz && node test/package-smoke.cjs pack.tgz"
+    "test:package": "pnpm pack --out pack.tgz && node test/package-smoke.cjs pack.tgz",
+    "test:catalog": "node test/catalog-smoke.cjs"
   },
   "dependencies": {
     "cosmiconfig": "^8.3.6",
@@ -28,6 +29,7 @@
     "fixpack": "^4.0.0",
     "picocolors": "^1.1.1",
     "semver": "^7.8.5",
+    "yaml": "^2.9.1",
     "yargs": "^17.7.3"
   },
   "devDependencies": {

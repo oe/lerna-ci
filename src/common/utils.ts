@@ -111,6 +111,12 @@ export async function readRootPkgJson() {
  */
 export async function getProjectRoot(): Promise<string> {
   const gitRoot = await getGitRoot()
+  const workspaceFile = findFileRecursive('pnpm-workspace.yaml')
+  if (workspaceFile && fs.existsSync(path.join(path.dirname(workspaceFile), 'package.json'))) {
+    const workspaceRoot = path.dirname(workspaceFile)
+    const pkg = readPackageJson(workspaceRoot)
+    if (!pkg.packageManager || pkg.packageManager.startsWith('pnpm@')) return workspaceRoot
+  }
   if (gitRoot && fs.existsSync(path.join(gitRoot, 'package.json'))) {
     return gitRoot
   }

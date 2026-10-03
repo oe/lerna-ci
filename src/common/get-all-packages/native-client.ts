@@ -11,7 +11,7 @@ export async function getAllPackages(rootPath?: string): Promise<IPackageDigest[
   rootPath = rootPath || await getProjectRoot()
   const pkgJson = readPackageJson(rootPath)
   const client = await getRepoNpmClient(rootPath)
-  if (fs.existsSync(path.join(rootPath, 'pnpm-workspace.yaml'))) {
+  if (client === 'pnpm' && fs.existsSync(path.join(rootPath, 'pnpm-workspace.yaml'))) {
     return await getPackagesViaPnpm(rootPath)
   }
   // not managed by npm or yarn's workspace feature

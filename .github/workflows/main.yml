@@ -30,8 +30,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm pack --out pack.tgz
       - run: node test/package-smoke.cjs pack.tgz
+      - run: pnpm test:catalog
       - uses: actions/setup-node@v4
         if: matrix.node == '14.6.0'
         with:
           node-version: ${{ matrix.node }}
       - run: node test/regression.cjs
+
+  catalogs-latest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: npm install --prefix "${{ runner.temp }}/catalog-tools" --ignore-scripts --no-audit --no-fund pnpm@latest
+      - run: node test/catalog-smoke.cjs "${{ runner.temp }}/catalog-tools/node_modules/.bin/pnpm"

@@ -131,6 +131,7 @@ async function try2ReadPkg(rootDir: string) {
 async function try2ReadClientCfg(rootDir: string) {
   const files = await fs.promises.readdir(rootDir, { withFileTypes: true })
   const fileNames = files.filter(f => f.isFile()).map(f => f.name)
+  if (fileNames.includes('pnpm-workspace.yaml')) return 'pnpm'
   if (fileNames.includes('yarn.lock')) return 'yarn'
   if (fileNames.includes('pnpm-lock.yaml')) return 'pnpm'
   if (fileNames.includes('package-lock.json')) return 'npm'

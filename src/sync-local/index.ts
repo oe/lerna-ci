@@ -12,8 +12,11 @@ import {
   IUpgradeVersionStrategy,
   getVersionTransformer,
   getGitRoot,
+  getProjectRoot,
+  getRepoNpmClient,
   IChangedPackage
 } from '../common'
+import { planCatalogUpdates, readPnpmCatalogs, validateCatalogReferences } from '../common/pnpm-catalogs'
 
 export interface ISyncPackageOptions {
   /**
@@ -37,7 +40,7 @@ export interface ISyncPackageOptions {
    */
   versionRangeStrategy?: IUpgradeVersionStrategy
   /**
-   * only check, with package.json files untouched
+   * only check, with package.json and pnpm-workspace.yaml files untouched
    * validate package whether need to update, don't change package.json file actually
    */
   checkOnly?: boolean
@@ -61,24 +64,36 @@ const DEFAULT_OPTIONS: ISyncPackageOptions = {
  */
 export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<IChangedPackage[] | false> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
-  const allPkgs = await getAllPackageDigests(options.packageFilter)
+  const rootPath = await getProjectRoot()
+  const isPnpm = await getRepoNpmClient(rootPath) === 'pnpm'
+  const catalogs = isPnpm ? await readPnpmCatalogs(rootPath) : undefined
+  const allPkgs = await getAllPackageDigests(options.packageFilter, rootPath)
   if (!allPkgs.length) {
     throw new Error('no packages found in current project')
   }
 
+  if (isPnpm) validateCatalogReferences(catalogs, allPkgs)
   const latestVersions = await getLatestVersions(options.versionSource!, allPkgs, options.versionStrategy)
-  const pkgsUpdated = allPkgs.map(item => {
+  const versionTransform = getVersionTransformer(options.versionRangeStrategy)
+  const catalogUpdate = planCatalogUpdates(catalogs, latestVersions, versionTransform, options.exact)
+  const manifestTransform = isPnpm
+    ? (name: string, oldVersion: string, newVersion: string) => oldVersion.startsWith('catalog:') ? oldVersion : versionTransform(name, oldVersion, newVersion)
+    : versionTransform
+  const pkgsUpdated = allPkgs.map((item): IChangedPackage | false => {
     const changes = updatePackageJSON({
       pkgDigest: item,
       latestVersions,
-      versionTransform: getVersionTransformer(options.versionRangeStrategy),
+      versionTransform: manifestTransform,
       checkOnly: options.checkOnly,
       pkgVersion: latestVersions[item.name],
       exact: options.exact
     })
     return changes && Object.assign({}, item, { changes })
-  }).filter(Boolean)
-  // @ts-ignore
+  }).filter((item): item is IChangedPackage => !!item)
+  if (catalogUpdate) {
+    if (!options.checkOnly) catalogUpdate.write()
+    pkgsUpdated.push(catalogUpdate.change)
+  }
   return !!pkgsUpdated.length && pkgsUpdated
 }
 
@@ -129,4 +144,3 @@ async function getLatestVersions(
   }, result)
   return result
 }
-

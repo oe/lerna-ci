@@ -42,7 +42,7 @@ const getVersionRangeOption = ()  => ({
 
 const checkOnlyOptions: Options = {
   alias: 'c',
-  describe: 'check for changes with package.json files untouched',
+  describe: 'check for changes with package.json and pnpm-workspace.yaml files untouched',
   type: 'boolean',
 }
 
@@ -132,7 +132,7 @@ yargs(hideBin(process.argv))
       const updatedPkgs = await syncLocal(options)
 
       if (updatedPkgs) {
-        logger.log(`[${CLI_NAME}][${cmdName}] the following package.json files ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
+        logger.log(`[${CLI_NAME}][${cmdName}] the following manifests ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
         await printChangedPackageJsons(updatedPkgs)
         if (!argv.checkOnly) {
           let npmClient = await getRepoNpmClient()
@@ -198,7 +198,7 @@ yargs(hideBin(process.argv))
         exact: argv.exact,
       }))
       if (updatedPkgs) {
-        logger.log(`[${CLI_NAME}][${cmdName}] the following package.json files' dependencies ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
+        logger.log(`[${CLI_NAME}][${cmdName}] the following manifests' dependencies ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
         await printChangedPackageJsons(updatedPkgs)
         if (!argv.checkOnly) {
           let npmClient = await getRepoNpmClient()

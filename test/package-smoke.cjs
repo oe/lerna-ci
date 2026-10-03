@@ -42,6 +42,8 @@ async function main() {
     assert.strictEqual(defaultConfig.__esModule, true, 'preserve tsc default-import interoperability')
     const entry = path.join(packageDir, manifest.main)
     const api = require(entry)
+    const yamlEntry = require.resolve('yaml', { paths: [packageDir] })
+    assert.strictEqual(require.cache[yamlEntry], undefined, 'load the catalog parser only for pnpm workspace operations')
     const imported = await import(pathToFileURL(entry).href)
     const [major, minor] = process.versions.node.split('.').map(Number)
     const supportsNamedCommonJSImports = major > 14 || (major === 14 && minor >= 13)
