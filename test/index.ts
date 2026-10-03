@@ -1,3 +1,3 @@
-import { getVersionsFromNpm } from '../src'
+import { getVersionsFromRegistry } from '../src'
 
-getVersionsFromNpm(['lerna-ci', '@abc/xxxx'], 'max').then(res => console.log(res))
+getVersionsFromRegistry({ pkgNames: ['lerna-ci', '@abc/xxxx'], versionStrategy: 'max' }).then(res => console.log(res))

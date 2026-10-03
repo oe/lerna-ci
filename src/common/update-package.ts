@@ -22,7 +22,7 @@ export function getVersionTransformer(rangeStrategy?: IVersionRangeStrategy) {
   if (rangeStrategy === 'retain') return retainVersion
   return (pkgName: string, oldVersion: string, newVersion: string) => {
     // if existing version not a valid semver version, like *, workspace:*, use existing version
-    if (!/^\d/.test(oldVersion)) return oldVersion
+    if (oldVersion === '*' || !semver.validRange(oldVersion)) return oldVersion
     if (/^\d/.test(newVersion)) return (`${rangeStrategy || ''}${newVersion}`).replace(/^\=/, '')
     // remove = for OCD patient
     if (/^\=\d/.test(newVersion)) return newVersion.replace('=', '')
@@ -165,7 +165,8 @@ function updateDepsVersion({ dependencies, versions, versionTransform, exact }: 
   Object.keys(dependencies).forEach(name => {
     const ver = getVersion(name, versions)
     if (!ver) return
-    if (!exact && semver.satisfies(dependencies[name], versions[name])) return
+    if (!exact && semver.validRange(ver) && semver.validRange(dependencies[name])
+      && semver.subset(ver, dependencies[name])) return
     const version = versionTransform(name, dependencies[name], ver)
     if (dependencies[name] !== version) {
       changed.push({

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { IPackageDigest } from '../types'
-import { getProjectRoot, isWin, runNpmCmd, runShellCmd } from '../utils'
+import { getProjectRoot, runNpmCmd } from '../utils'
 
 /**
  * get all package's info in a lerna project
@@ -31,22 +31,14 @@ export async function isManagedByLerna() {
   return fs.existsSync(path.join(rootRepo, 'lerna.json'))
 }
 
-let isLernaInstalled: undefined | boolean
 /**
  * detect whether lerna has been installed
  */
-async function isLernaAvailable() {
-  if (typeof isLernaInstalled === 'boolean') return isLernaInstalled
+export async function isLernaAvailable() {
   try {
-    await runShellCmd(isWin ? 'npx.cmd' : 'npx', [
-      '--no-install',
-      'lerna',
-      '-v'
-    ])
-    isLernaInstalled = true
+    await runNpmCmd('--no-install', 'lerna', '-v')
     return true
   } catch {
-    isLernaInstalled = false
     return false
   }
 }

@@ -211,7 +211,7 @@ getAllPackageDigests().then(res => console.log(res))
 // [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
 
 // find packages with custom filter function
-getAllPackageDigests((digest => digest.name.startWith('@inner/a-'))).then(res => console.log(res))
+getAllPackageDigests((digest => digest.name.startsWith('@inner/a-'))).then(res => console.log(res))
 
 // find public packages which package name contains '@inner/'
 getAllPackageDigests({ignorePrivate: true, keyword: '@inner/'}).then(res => console.log(res))
@@ -269,7 +269,7 @@ export interface ISyncPackageOptions {
   /**
    * version source, default to `local`
    * how to get latest locale package versions: npm, git, local or all
-   * @default 'all'
+   * @default 'local'
    */
   versionSource?: EVerSource
   /**
@@ -306,7 +306,7 @@ export type IUpgradeVersionStrategy = '>' | '~' | '^' | '>=' | '' | 'retain' | I
 /**
  * custom version transform
  */
-export type IVerTransform = (name: string, newVersion: string, oldVersion: string) => string
+export type IVerTransform = (name: string, oldVersion: string, newVersion: string) => string
 
 ```
 
@@ -474,7 +474,7 @@ batch version of `getVersionFormRegistry`, but return an object(key is package n
 
 Type Declarations:
 ```ts
-getVersionsFromRegistry(options: IGetPkgVersionsFromRegistryOptions) => Promise<string | undefined>
+getVersionsFromRegistry(options: IGetPkgVersionsFromRegistryOptions) => Promise<Record<string, string>>
 
 export interface IGetPkgVersionsFromRegistryOptions {
   /**
@@ -499,7 +499,7 @@ export interface IGetPkgVersionsFromRegistryOptions {
 
 ### getPackageVersionsFromGit
 get monorepo package version map from git tag list(only tags in `packageName@versionNumber` like `react@1.0.0` will be recognized).  
-**caution**: this api will run `git fetch origin --prune --tags` to sync tags from server, local un-pushed tags will be removed
+This API runs `git fetch origin --prune --tags` to sync remote tags and prune stale remote-tracking branches. It does not delete local-only tags.
 
 e.g.
 ```js
@@ -589,8 +589,8 @@ You may also add config for these commands via following ways(powered by [cosmic
 * add `lerna-ci.config.js` or `lerna-ci.config.cjs` file in the root of the project
 
 all these configurations should return an object with the following properties:
-* `synclocal`: same as the params of [syncPackageVersions](#syncpackageversions)
-* `syncremote`: same as the params of [syncPackageDependenceVersion](#syncpackagedependenceversion)
+* `synclocal`: use `versionSource` and `versionRangeStrategy` from [syncLocal](#synclocal-api); legacy `source` and `versionRange` are also accepted
+* `syncremote`: an array of dependency names or an object mapping names/patterns to versions
 * `fixpack`: same as the params of [fixpack](#fixpack-api)
 
 
@@ -599,3 +599,44 @@ If you are updating from `0.0.x`, you should be careful about following changes:
 
 1. default configuration for `fixpack` has been changed, you may restore the former behavior by setting `fixpack.config` to [old configuration](https://github.com/oe/lerna-ci/blob/legacy/src/fixpack/config.ts) in [configuration file](#configurationfile)
 2. if you are using APIs, most useful APIs are renamed for better understanding, but no feature is removed, you may read docs above to upgrade
+
+
+## Development and validation
+
+```sh
+yarn install --frozen-lockfile --ignore-scripts
+yarn test
+npm pack --dry-run
+```
+
+`yarn test` builds the library and runs offline regression tests against temporary
+workspaces, the compiled CLI, registry responses, and Git publish checks. CI runs
+on Node 14.6 (the minimum supported runtime), 22, and 24, plus Windows on Node 22.
+Node 14 is end-of-life; use a maintained Node release for new projects.
+
+The `--exact false` option preserves an existing dependency range when it contains
+the target version or target range. Explicit range strategies such as `--range '~'`
+also apply to existing caret and tilde dependencies. Protocols such as `workspace:*`,
+`file:`, and npm aliases are preserved.
+
+`canpublish` blocks unresolved Git conflicts even with `--check-git false`, compares
+upstream revision counts independently of Git's display language, and stops if the
+registry request fails with an authentication, network, or server error. A missing
+package (`E404`) is treated as unpublished. General registry lookups retain their
+warning-and-undefined behavior; API callers can opt into errors with `throwOnError: true`.
+
+CLI configuration uses the documented `lerna-ci` name. Existing `lerna-cli` files
+and package fields remain supported as a fallback. Invalid configuration now raises
+an error. `synclocal` CLI flags override configured source and range values.
+
+Workspace discovery reads fresh manifests on each call and includes the root
+package once. Yarn Classic object-form workspaces (`{ "packages": [...] }`) are
+supported. `changed` requires Lerna or Changesets; npm/pnpm/Yarn workspaces alone
+do not provide change detection. Remote tag synchronization expects an `origin`
+remote, and publish checks require a configured upstream branch.
+
+The native workspace scanner limits brace/parenthesis pattern nesting to 32 to
+mitigate [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
+The transitive `braces` package still has no patched release, so dependency audits
+continue to report this advisory. Replace or upgrade that dependency when a fix
+becomes available; the guard applies to the native scanner's input, not other tools.

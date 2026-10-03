@@ -1,6 +1,7 @@
 
 import { IVersionPickStrategy, IVersionMap } from '../types'
 import { runShellCmd, maxVersion, syncPruneGitTags } from '../utils'
+import semver from 'semver'
 /**
  * get package version from git tags
  */
@@ -12,10 +13,11 @@ const tagVerReg = /^((?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*)@(\d
  * @param tag tag name: @elements/list@1.2.3
  */
 function convertGitTag(tag: string) {
-  if (tagVerReg.test(tag)) {
+  const match = tag.match(tagVerReg)
+  if (match && semver.valid(match[2])) {
     return {
-      name: RegExp.$1,
-      version: RegExp.$2,
+      name: match[1],
+      version: match[2],
     }
   }
   return
@@ -54,7 +56,9 @@ export async function getPackageVersionsFromGit(type: IVersionPickStrategy = 'la
     }, {} as Record<string, string[]>)
     return Object.keys(versionMap).reduce((acc, key) => {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      acc[key] = maxVersion(...versionMap[key])!
+      const versions = versionMap[key]
+      const stable = versions.filter(v => !semver.prerelease(v))
+      acc[key] = maxVersion(...(type === 'max-stable' && stable.length ? stable : versions))!
       return acc
     }, {} as IVersionMap)
   }

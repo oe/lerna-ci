@@ -29,7 +29,6 @@ setConfig({ debug: true })
 
 const getVersionRangeOption = ()  => ({
   alias: 'r',
-  default: 'retain',
   describe: 'version range, you can use caret(^), tilde(~), gte(>=), gt(>), eq(=), retain(keep what it is)',
   coerce: (v) => {
     const rangeMap = { caret: '^', tilde: '~', gte: '>=', gt: '>', eq: '=', retain: 'retain' }
@@ -86,12 +85,12 @@ yargs(hideBin(process.argv))
     (yargs) => yargs
       .usage('$0 synclocal [source] [--range <versionRange>]')
       .example([
-        ['$0 synclocal', 'sync all local packages\' versions using all sources'],
+        ['$0 synclocal', 'sync all local packages\' versions using local versions'],
         ['$0 synclocal local', 'sync all local packages\' versions using local packages\' versions'],
         ['$0 synclocal local --range "^"', 'sync all local packages\' versions using local packages\' versions and reset version range to caret(^)'],
         ['$0 synclocal local --range "retain"', 'sync all local packages\' versions using local packages\' versions and keep version range'],
         ['$0 synclocal git --exact false', 'sync all local packages\' versions using git tags and only update when existing version range is not satisfied with the new version'],
-        ['$0 synclocal --check-only', 'check all local packages\' versions using all sources and exit with code 1 if any package.json file will be changed'],
+        ['$0 synclocal --check-only', 'check all local packages\' versions using local versions and exit with code 1 if any package.json file will be changed'],
       ])
       .positional('source', {
         describe: 'packages\' versions sources, could be:\
@@ -121,8 +120,8 @@ yargs(hideBin(process.argv))
         : 'try to sync local packages\' versions'
 
       console.log(`[${CLI_NAME}][${cmdName}] ${cliMessage}`)
-      const source = argv.source || repoConfig.synclocal?.source || 'local'
-      const versionRange = argv.range || repoConfig.synclocal?.versionRange
+      const source = argv.source ?? repoConfig.synclocal?.versionSource ?? repoConfig.synclocal?.source ?? 'local'
+      const versionRange = argv.range ?? repoConfig.synclocal?.versionRangeStrategy ?? repoConfig.synclocal?.versionRange ?? 'retain'
       const options = {
         versionSource: source,
         versionRangeStrategy: versionRange,
@@ -194,8 +193,9 @@ yargs(hideBin(process.argv))
         : { versionMap: syncRemoteConfig }
       // @ts-ignore
       const updatedPkgs = await syncDeps(Object.assign(options, {
-        versionRangeStrategy: argv.range,
-        checkOnly: argv.checkOnly
+        versionRangeStrategy: argv.range ?? 'retain',
+        checkOnly: argv.checkOnly,
+        exact: argv.exact,
       }))
       if (updatedPkgs) {
         logger.log(`[${CLI_NAME}][${cmdName}] the following package.json files' dependencies ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)

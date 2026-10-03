@@ -13,9 +13,10 @@ export const getPkgVersion: IGetPkgVersionFromRegistry = async (options): Promis
     ['info', options.pkgName, options.versionStrategy === 'latest' && !options.version ? 'version' : 'versions', '--json'])
    
   const content =  JSON.parse(result)
-  if (options.versionStrategy === 'latest') return content
   if (options.version) {
-    return content.includes(options.version) ? options.version : ''
+    const versions = Array.isArray(content) ? content : [content]
+    return versions.includes(options.version) ? options.version : ''
   }
-  return getMaxStableVersion(content, options.versionStrategy!)
+  if (options.versionStrategy === 'latest') return content
+  return getMaxStableVersion(Array.isArray(content) ? content : [content], options.versionStrategy!)
 }

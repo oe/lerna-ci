@@ -44,8 +44,8 @@ export async function getVersionsFromRegistry({ pkgNames, versionStrategy, npmCl
   if (!processors[client]) {
     throw new Error('unsupported npm client: ' + client)
   }
-  while (pkgNames.length) {
-    const items = pkgNames.splice(-6)
+  for (let offset = 0; offset < pkgNames.length; offset += 6) {
+    const items = pkgNames.slice(offset, offset + 6)
     const vers = await Promise.all(items.map(name => getVersionFormRegistry({
       pkgName: name,
       versionStrategy: versionStrategy || 'max',
@@ -61,7 +61,7 @@ export async function getVersionsFromRegistry({ pkgNames, versionStrategy, npmCl
 }
 
 export async function getVersionFormRegistry(
-  options: IGetPkgVersionFromRegistryOptions & {npmClient?: INpmClient }): Promise<string | undefined> {
+  options: IGetPkgVersionFromRegistryOptions & {npmClient?: INpmClient; throwOnError?: boolean }): Promise<string | undefined> {
   const npmClient = options.npmClient || await getRepoNpmClient()
   const client = processors[npmClient]
   if (!client) {
@@ -71,18 +71,18 @@ export async function getVersionFormRegistry(
     const version = await client.getPkgVersion(options)
     return version
   } catch (error: any) {
-    logger.warn(`[lerna-ci] unable to get version of ${options.pkgName} from registry`, error.message)
+    // A missing package has no occupied versions; other failures must block publish checks.
+    if (options.throwOnError && !/\bE404\b/.test(String(error))) throw error
+    logger.warn(`[lerna-ci] unable to get version of ${options.pkgName} from registry`, error instanceof Error ? error.message : String(error))
     return
   }
 }
 
 
-let repoNpmClient: INpmClient | undefined
 /**
  * get lerna monorepo preferred npm client
  */
 export async function getRepoNpmClient(): Promise<INpmClient> {
-  if (typeof repoNpmClient !== 'undefined') return repoNpmClient
   let client = await try2ReadPkg()
   if (client === false) {
     client = await try2ReadClientCfg()
@@ -95,10 +95,7 @@ export async function getRepoNpmClient(): Promise<INpmClient> {
     const yarnVersion = await runShellCmd('yarn', ['--version'])
     if (!/^[01]\./.test(yarnVersion)) client = 'yarn-next'
   }
-  // @ts-ignore
-  repoNpmClient = client
-  // @ts-ignore
-  return repoNpmClient
+  return client as INpmClient
 }
 
 async function try2getLernaClient() {

@@ -10,25 +10,28 @@
   "scripts": {
     "dev": "ts-node test/index.ts",
     "clean": "rimraf ./dist",
-    "prebuild": "yarn run lint && yarn run clean",
-    "build": "tsc && chmod +x dist/bin/index.js",
-    "prepublish": "yarn run build",
+    "prebuild": "npm run lint && npm run clean",
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/bin/index.js', 0o755)\"",
     "lint-message": "echo 'lint code before commit'",
-    "lint": "eslint './src/**/*.{ts,tsx}'",
-    "release": "yarn build && yarn publish"
+    "lint": "eslint \"./src/**/*.{ts,tsx}\"",
+    "release": "yarn build && yarn publish",
+    "prepack": "npm run build",
+    "test": "npm run build && node test/regression.cjs"
   },
   "dependencies": {
     "@types/semver": "^7.3.9",
     "@types/yargs": "^17.0.13",
     "cosmiconfig": "^7.0.1",
+    "cross-spawn": "^7.0.6",
     "detect-indent": "^6.0.0",
     "find-packages": "^9.0.10",
     "fixpack": "^4.0.0",
     "picocolors": "^1.0.0",
-    "semver": "^7.3.5",
+    "semver": "^7.7.2",
     "yargs": "^17.5.1"
   },
   "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
     "@types/node": "14",
     "@typescript-eslint/eslint-plugin": "^5.5.0",
     "@typescript-eslint/parser": "^5.5.0",
@@ -38,7 +41,7 @@
     "typescript": "^4.5.2"
   },
   "engines": {
-    "node": ">=8"
+    "node": ">=14.6"
   },
   "keywords": [
     "ci/cd",
@@ -50,5 +53,8 @@
     "monorepo",
     "toolkit"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "resolutions": {
+    "@types/node": "14.18.63"
+  }
 }

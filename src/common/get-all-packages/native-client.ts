@@ -15,14 +15,16 @@ export async function getAllPackages(): Promise<IPackageDigest[] | false> {
     return await getPackagesViaPnpm(rootPath)
   }
   // not managed by npm or yarn's workspace feature
-  if (!pkgJson.workspaces || !pkgJson.workspaces.length) return false
+  const workspacePatterns = Array.isArray(pkgJson.workspaces) ? pkgJson.workspaces : pkgJson.workspaces?.packages
+  if (!workspacePatterns?.length) return false
   switch (client) {
     case 'yarn':
       return await getPackagesViaYarn(rootPath)
     case 'yarn-next':
       return await getPackagesViaYarnNext(rootPath)
+    case 'pnpm':
     case 'npm':    
-      return await getPackagesViaGlob(rootPath, pkgJson.workspaces)
+      return await getPackagesViaGlob(rootPath, workspacePatterns)
     default:
       return false
   }
@@ -32,11 +34,9 @@ async function getPackagesViaYarn(rootPath: string): Promise<IPackageDigest[]> {
   const content = await runShellCmd('yarn', ['workspaces', 'info', '--json'], {
     cwd: rootPath,
   })
-  const lines = content.split('\n')
-  if (!lines[0].trim().startsWith('{')) lines.shift()
-  if (!lines[lines.length - 1].trim().endsWith('}')) lines.pop()
+  const jsonOutput = content.slice(content.indexOf('{'), content.lastIndexOf('}') + 1)
   try {
-    const json = JSON.parse(lines.join(''))
+    const json = JSON.parse(jsonOutput)
     return Object.keys(json).map(name => {
       const location = path.join(rootPath, json[name].location)
       const pkgJson = readPackageJson(location)
@@ -100,6 +100,24 @@ async function getPackagesViaPnpm(rootPath: string): Promise<IPackageDigest[]> {
 }
 
 async function getPackagesViaGlob(rootPath: string, workspacePatterns: string[]): Promise<IPackageDigest[]> {
+  // braces currently has no patched release for GHSA-vfj7-8cjw-p6xm.
+  // Bound AST nesting before passing project-supplied patterns to fast-glob.
+  for (const pattern of workspacePatterns) {
+    if (typeof pattern !== 'string') throw new Error('workspace patterns must be strings')
+    const nesting: string[] = []
+    for (let index = 0; index < pattern.length; index++) {
+      const char = pattern[index]
+      if (char === '\\') {
+        index++
+      } else if (char === '{' || char === '(') {
+        nesting.push(char)
+        if (nesting.length > 32) throw new Error('workspace pattern nesting exceeds the supported limit of 32')
+      } else if ((char === '}' && nesting[nesting.length - 1] === '{')
+        || (char === ')' && nesting[nesting.length - 1] === '(')) {
+        nesting.pop()
+      }
+    }
+  }
   // find packages via pnpm's find-packages
   const pkgs = await findPkgs(rootPath, {
     patterns: workspacePatterns

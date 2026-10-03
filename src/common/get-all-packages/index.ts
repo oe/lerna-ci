@@ -4,12 +4,12 @@
 
 import path from 'path'
 import { IPackageDigest } from '../types'
-import { getProjectRoot } from '../utils'
+import { getProjectRoot, readPackageJson } from '../utils'
 import { logger } from '../logger'
 import * as lerna from './lerna'
 import * as native from './native-client'
 
-export { isManagedByLerna } from './lerna'
+export { isManagedByLerna, isLernaAvailable } from './lerna'
 
 /** package filter object */
 export interface IPackageFilterObject {
@@ -34,16 +34,14 @@ export async function getAllPackageDigests(filter?: IPackageFilterOptions): Prom
     filter = (pkg: IPackageDigest) => {
       // ignore private
       if (filterOptions.ignorePrivate && pkg.private) return false
-      if (filterOptions.keyword) pkg.name.indexOf(filterOptions.keyword) > -1
+      if (filterOptions.keyword && !pkg.name.includes(filterOptions.keyword)) return false
       return true
     }
   }
   return result.filter(filter)
 }
 
-let cachedDigests: IPackageDigest[]
 async function getAllPkgDigests() {
-  if (cachedDigests) return cachedDigests
   let result = await lerna.getAllPackages()
   if (result === false) {
     result = await native.getAllPackages()
@@ -52,33 +50,21 @@ async function getAllPkgDigests() {
     logger.warn('[lerna-ci] unable to get workspace packages, maybe current project not a monorepo')
     result = []
   }
-  // root package is private by default
+  // Include the root package once.
   const selfPkgDigest = await getRootPackageDigest()
-  if (selfPkgDigest) result.push(selfPkgDigest)
-  cachedDigests = result
-  return cachedDigests
+  if (selfPkgDigest && !result.some(pkg => path.resolve(pkg.location) === path.resolve(selfPkgDigest.location))) result.push(selfPkgDigest)
+  return result
 }
 
 
-let rootRepoPkg: IPackageDigest | undefined | null
-/**
- * get package digest from repo root
- */
-export async function getRootPackageDigest(): Promise<IPackageDigest | null> {
-  if (typeof rootRepoPkg !== 'undefined') return rootRepoPkg
+/** get package digest from repo root, reading the current manifest */
+export async function getRootPackageDigest(): Promise<IPackageDigest> {
   const rootPath = await getProjectRoot()
-  const defPkgPath = path.join(rootPath, 'package.json')
-  if (defPkgPath) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pkg = require(defPkgPath)
-    rootRepoPkg = {
-      name: pkg.name,
-      version: pkg.version,
-      private: pkg.private || false,
-      location: path.dirname(defPkgPath)
-    }
-  } else {
-    rootRepoPkg = null
+  const pkg = readPackageJson(rootPath)
+  return {
+    name: pkg.name || '',
+    version: pkg.version || '',
+    private: !!pkg.private,
+    location: rootPath
   }
-  return rootRepoPkg
 }

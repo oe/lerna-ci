@@ -44,7 +44,7 @@ export type IVersionPickStrategy = 'max' | 'latest' | 'max-stable'
 /**
  * custom version transform
  */
-export type IVerTransform = (name: string, newVersion: string, oldVersion: string) => string
+export type IVerTransform = (name: string, oldVersion: string, newVersion: string) => string
 
 /**
  * upgrade version strategy

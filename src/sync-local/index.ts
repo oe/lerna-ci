@@ -19,7 +19,7 @@ export interface ISyncPackageOptions {
   /**
    * version source, default to `local`
    * how to get latest locale package versions: npm, git, local or all
-   * @default 'all'
+   * @default 'local'
    */
   versionSource?: EVerSource
   /**
@@ -43,14 +43,16 @@ export interface ISyncPackageOptions {
   checkOnly?: boolean
   /**
    * check whether packages' versions are exactly same
+   * @default true
    */
   exact?: boolean
 }
 
 const DEFAULT_OPTIONS: ISyncPackageOptions = {
-  versionSource: EVerSource.ALL,
+  versionSource: EVerSource.LOCAL,
   versionStrategy: 'latest',
   versionRangeStrategy: 'retain',
+  exact: true,
 }
 
 /**

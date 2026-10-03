@@ -1,7 +1,8 @@
 import path from 'path'
 import fs from 'fs'
 import semver from 'semver'
-import child_process, { type SpawnOptions } from 'child_process'
+import { type SpawnOptions } from 'child_process'
+import spawn from 'cross-spawn'
 import { IPackageDigest } from './types'
 
 /**
@@ -27,14 +28,14 @@ export function runShellCmd (cmd: string, args?: string[] | SpawnOptions, option
     options = args
     args = []
   }
-  const task = child_process.spawn(
+  const task = spawn(
     cmd,
     // @ts-ignore
     args,
     Object.assign(
       {
         cwd: process.cwd(),
-        shell: true
+        shell: false
       },
       options
     )
@@ -44,21 +45,21 @@ export function runShellCmd (cmd: string, args?: string[] | SpawnOptions, option
     // record response content
     const stdout: (string | Buffer)[] = []
     const stderr: (string | Buffer)[] = []
-    task.stdout!.on('data', data => {
+    task.stdout?.on('data', data => {
       stdout.push(data)
     })
-    task.stderr!.on('data', data => {
+    task.stderr?.on('data', data => {
       stderr.push(data)
     })
 
     // listen on error, to aviod command crash
-    task.on('error', () => {
-      reject(stderr.join('').toString())
+    task.on('error', error => {
+      reject(error)
     })
 
-    task.on('exit', code => {
-      if (code) {
-        stderr.unshift(`error code: ${code}\n`)
+    task.on('close', (code, signal) => {
+      if (code !== 0) {
+        stderr.unshift(`error code: ${code}${signal ? `, signal: ${signal}` : ''}\n`)
         reject(stderr.join('').toString())
       } else {
         resolve(stdout.join('').toString())
@@ -75,7 +76,7 @@ export function runShellCmd (cmd: string, args?: string[] | SpawnOptions, option
  */
 export function findFileRecursive (fileName: string | string[], dir = process.cwd(), isDir = false): string {
   // const filepath = path.join(dir, fileName)
-  const fileNames = Array.isArray(fileName) ? fileName : [fileName]
+  const fileNames = Array.isArray(fileName) ? fileName.slice() : [fileName]
   let f: string | undefined = ''
   // tslint:disable-next-line:no-conditional-assignment
   while ((f = fileNames.shift())) {
@@ -105,39 +106,32 @@ export async function readRootPkgJson() {
   return readPackageJson(rootRepo)
 }
 
-let projectRoot: string
 /**
  * get current project root dir
  */
 export async function getProjectRoot(): Promise<string> {
-  if (projectRoot) return projectRoot
   const gitRoot = await getGitRoot()
   if (gitRoot && fs.existsSync(path.join(gitRoot, 'package.json'))) {
-    projectRoot = gitRoot
-  } else {
-    const defPkgPath = findFileRecursive('package.json', process.cwd())
-    projectRoot = path.dirname(defPkgPath)
+    return gitRoot
   }
-  if (!projectRoot) {
+  const defPkgPath = findFileRecursive('package.json', process.cwd())
+  if (!defPkgPath) {
     throw new Error('unable to determine project root path')
   }
-  return projectRoot
+  return path.dirname(defPkgPath)
 }
 
-let gitRootPath: string | false
 
 /**
  * get git root path, return false if not in git repo
  */
 export async function getGitRoot(): Promise<string | false> {
-  if (gitRootPath !== undefined) return gitRootPath
   try {
     const result = await runShellCmd('git', ['rev-parse', '--show-toplevel'])
-    gitRootPath = result.trim()
+    return result.trim()
   } catch (error) {
-    gitRootPath = false
+    return false
   }
-  return gitRootPath
 }
 
 
