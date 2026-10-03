@@ -62,7 +62,7 @@ async function checkInternalRanges() {
 
 | `ISyncPackageOptions` field | Meaning / default |
 | --- | --- |
-| `versionSource` | `EVerSource.LOCAL` (default), `NPM`, `GIT`, or `ALL` |
+| `versionSource` | `EVerSource.ALL` (API default), `LOCAL`, `NPM`, or `GIT`; the CLI defaults to `local` |
 | `versionStrategy` | Remote version selection: `latest` (default), `max`, or `max-stable` |
 | `packageFilter` | Object or predicate selecting workspace packages |
 | `versionRangeStrategy` | `retain` (default), `^`, `~`, `>`, `>=`, empty string, or a custom transform |
@@ -222,7 +222,7 @@ falling back to prereleases when no stable version exists).
 | `findFileRecursive(names, dir?, isDir?)` | Search the current directory and ancestors |
 | `readPackageJson(directory)` / `readRootPkgJson()` | Read fresh JSON manifests |
 | `isManagedByLerna()` / `isLernaAvailable()` | Detect configuration / installed Lerna |
-| `runShellCmd(command, args?, options?)` | Run literal arguments with cross-spawn; reject failed exits/signals |
+| `runShellCmd(command, args?, options?)` | Shell execution by default for compatibility; pass `{ shell: false }` for literal arguments; reject failed exits/signals |
 | `runNpmCmd(...args)` | Run npx in the project root |
 | `syncPruneGitTags()` | Fetch origin tags and prune stale remote-tracking branches |
 | `maxVersion(...versions)` | Maximum of valid semver inputs; use full versions such as `0.1.0` |

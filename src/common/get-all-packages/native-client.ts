@@ -32,7 +32,7 @@ export async function getAllPackages(rootPath?: string): Promise<IPackageDigest[
 
 async function getPackagesViaYarn(rootPath: string): Promise<IPackageDigest[]> {
   const content = await runShellCmd('yarn', ['workspaces', 'info', '--json'], {
-    cwd: rootPath,
+    cwd: rootPath, shell: false,
   })
   const jsonOutput = content.slice(content.indexOf('{'), content.lastIndexOf('}') + 1)
   try {
@@ -54,7 +54,7 @@ async function getPackagesViaYarn(rootPath: string): Promise<IPackageDigest[]> {
 
 async function getPackagesViaYarnNext(rootPath: string): Promise<IPackageDigest[]> {
   const content = await runShellCmd('yarn', ['workspaces', 'list', '--json'], {
-    cwd: rootPath,
+    cwd: rootPath, shell: false,
   })
 
   try {
@@ -79,7 +79,7 @@ async function getPackagesViaYarnNext(rootPath: string): Promise<IPackageDigest[
 
 async function getPackagesViaPnpm(rootPath: string): Promise<IPackageDigest[]> {
   const content = await runShellCmd('pnpm', ['m', 'ls', '--json'], {
-    cwd: rootPath,
+    cwd: rootPath, shell: false,
   })
 
   try {

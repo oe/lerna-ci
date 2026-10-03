@@ -31,7 +31,7 @@ export async function getPackageVersionsFromGit(type: IVersionPickStrategy = 'la
   // git semver sorting failed to sort with prerelease version // ['tag', '-l', '|', 'sort', '-V', '--reverse']
   const tagArgs = ['tag', '-l', '--sort=-creatordate']
   // get tags sort by tag version desc
-  const tags = await runShellCmd('git', tagArgs)
+  const tags = await runShellCmd('git', tagArgs, { shell: false })
   if (!tags) return {}
   const tagLines = tags.trim().split('\n')
   if (type === 'latest') {

@@ -20,9 +20,9 @@ import { planCatalogUpdates, readPnpmCatalogs, validateCatalogReferences } from 
 
 export interface ISyncPackageOptions {
   /**
-   * version source, default to `local`
+   * version source, default to `all` for the API (`local` for the CLI)
    * how to get latest locale package versions: npm, git, local or all
-   * @default 'local'
+   * @default 'all'
    */
   versionSource?: EVerSource
   /**
@@ -52,9 +52,11 @@ export interface ISyncPackageOptions {
 }
 
 const DEFAULT_OPTIONS: ISyncPackageOptions = {
-  versionSource: EVerSource.LOCAL,
+  versionSource: EVerSource.ALL,
   versionStrategy: 'latest',
   versionRangeStrategy: 'retain',
+  // The 2.0.2 API rewrote satisfying ranges by default. Keep that behavior while
+  // allowing callers to opt into the corrected exact:false containment check.
   exact: true,
 }
 

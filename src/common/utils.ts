@@ -15,7 +15,7 @@ export const isWin = /^win/.test(process.platform)
 
 
 /**
- * run local shell command with spawn
+ * run a shell command; use shell:false to pass literal command arguments
  *  resolve with command exec outputs if cmd return 0, or reject with error message
  * @param  {String} cmd     cmd name
  * @param  {Array<String>} args    args list
@@ -35,7 +35,7 @@ export function runShellCmd (cmd: string, args?: string[] | SpawnOptions, option
     Object.assign(
       {
         cwd: process.cwd(),
-        shell: false
+        shell: true
       },
       options
     )
@@ -98,7 +98,7 @@ export function findFileRecursive (fileName: string | string[], dir = process.cw
 /** run npm command via npx */
 export async function runNpmCmd(...args: string[]) {
   const rootPath = await getProjectRoot()
-  return runShellCmd(isWin ? 'npx.cmd' : 'npx', args, { cwd: rootPath })
+  return runShellCmd(isWin ? 'npx.cmd' : 'npx', args, { cwd: rootPath, shell: false })
 }
 
 export async function readRootPkgJson() {
@@ -112,7 +112,8 @@ export async function readRootPkgJson() {
 export async function getProjectRoot(): Promise<string> {
   const gitRoot = await getGitRoot()
   const workspaceFile = findFileRecursive('pnpm-workspace.yaml')
-  if (workspaceFile && fs.existsSync(path.join(path.dirname(workspaceFile), 'package.json'))) {
+  const workspaceWithinGit = !gitRoot || (workspaceFile && !path.relative(gitRoot, path.dirname(workspaceFile)).split(path.sep).includes('..'))
+  if (workspaceFile && workspaceWithinGit && fs.existsSync(path.join(path.dirname(workspaceFile), 'package.json'))) {
     const workspaceRoot = path.dirname(workspaceFile)
     const pkg = readPackageJson(workspaceRoot)
     if (!pkg.packageManager || pkg.packageManager.startsWith('pnpm@')) return workspaceRoot
@@ -133,7 +134,7 @@ export async function getProjectRoot(): Promise<string> {
  */
 export async function getGitRoot(): Promise<string | false> {
   try {
-    const result = await runShellCmd('git', ['rev-parse', '--show-toplevel'])
+    const result = await runShellCmd('git', ['rev-parse', '--show-toplevel'], { shell: false })
     return result.trim()
   } catch {
     return false
@@ -179,7 +180,7 @@ export function readPackageJson(pkgPath: string) {
  * // sync all tags from remote, and prune no-exists tags in locale
  */
 export async function syncPruneGitTags() {
-  await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'])
+  await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'], { shell: false })
 }
 
 function getPackageDependencies(pkgDigest: IPackageDigest, unique?: boolean) {

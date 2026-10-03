@@ -98,7 +98,7 @@ export async function getRepoNpmClient(rootDir?: string): Promise<INpmClient> {
   }
   if (!client) client = 'npm'
   if (client === 'yarn') {
-    const yarnVersion = await runShellCmd('yarn', ['--version'])
+    const yarnVersion = await runShellCmd('yarn', ['--version'], { shell: false })
     if (!/^[01]\./.test(yarnVersion)) client = 'yarn-next'
   }
   return client as INpmClient

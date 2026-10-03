@@ -125,7 +125,7 @@ export interface IGitStatus {
 }
 
 async function checkGitLocalStatus(checkCommit?: boolean): Promise<IGitStatus> {
-  let gitStatus = await runShellCmd('git', ['status', '--porcelain'])
+  let gitStatus = await runShellCmd('git', ['status', '--porcelain'], { shell: false })
   gitStatus = gitStatus.trim()
   if (!gitStatus) return { status: 'clean' }
   const messages = gitStatus.split('\n')
@@ -152,7 +152,7 @@ export interface IGitSyncStatus {
 
 async function checkGitSyncStatus(): Promise<IGitSyncStatus> {
   try {
-    const result = await runShellCmd('git', ['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'])
+    const result = await runShellCmd('git', ['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'], { shell: false })
     const [ahead, behind] = result.trim().split(/\s+/).map(Number)
     if (!Number.isFinite(ahead) || !Number.isFinite(behind)) throw new Error('invalid Git revision counts')
     return {
@@ -200,7 +200,7 @@ async function checkPkgVersionAvailable(meta: IPackageDigest, checkGit: boolean)
   if (!meta.version) return result
   if (checkGit) {
     const tagName = `${meta.name}@${meta.version}`
-    const tag = await runShellCmd('git', ['tag', '-l', tagName])
+    const tag = await runShellCmd('git', ['tag', '-l', tagName], { shell: false })
     if (tag.trim()) {
       result.available = false
       result.reasons = [ 'git' ]

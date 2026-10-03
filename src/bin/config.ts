@@ -8,7 +8,7 @@ export interface IConfig {
   // package name need to sync
   syncremote?: string[] | Record<string, string>
   // local package version source: all, git, npm, local
-  synclocal?: ISyncPackageOptions & {
+  synclocal?: Pick<ISyncPackageOptions, 'versionSource' | 'versionRangeStrategy'> & {
     source?: ISyncPackageOptions['versionSource']
     versionRange?: ISyncPackageOptions['versionRangeStrategy']
   }

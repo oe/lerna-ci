@@ -36,9 +36,20 @@ The catalog integration suite also exercises the current latest pnpm release.
 See the [release procedure](releasing.md) for the prepared 2.1.0 release.
 
 Workspace scans resolve the project root once per operation and continue to read
-fresh manifests. A local 51-package benchmark (20 measured samples after warmup)
-reduced median scan time from 28.8 ms to 9.7 ms and Git subprocesses from seven to
-one; timings depend on the host and repository. Registry lookups deduplicate
+fresh manifests. Unlike 2.0.2, repeated scans do not return a permanently cached
+package list: this fixes stale versions and working-directory changes, but adds
+I/O to repeated API calls. A local comparison against the actual published 2.0.2
+tarball (51 packages, 12 fresh processes per version) measured median first scans
+of 81 ms versus 69 ms and repeated scans of 0.009 ms versus 24 ms. The old repeated
+scan returned stale data after a manifest edit; the new scan returned the updated
+version. Median module loading was 141 ms versus 151 ms; RSS after these scans was
+45 MiB versus 53 MiB. These are host-specific observations, not performance guarantees.
+The earlier 28.8 ms versus 9.7 ms measurement compared two intermediate development
+versions and should not be interpreted as a speedup over published 2.0.2.
+Catalog edits index YAML entries once and assemble the updated file once.
+A synthetic 10,000-entry update plan fell from 3.57 seconds to 68 ms after this
+review (five measured runs after warmup); this excludes YAML parsing and file I/O.
+Registry lookups deduplicate
 package names and keep up to six requests active without waiting for an entire
 batch, while preserving result order. Explicit wildcard version overrides also
 avoid redundant registry requests.
@@ -62,6 +73,9 @@ warning-and-undefined behavior; API callers can opt into errors with `throwOnErr
 CLI configuration uses the documented `lerna-ci` name. Existing `lerna-cli` files
 and package fields remain supported as a fallback. Invalid configuration now raises
 an error. `synclocal` CLI flags override configured source and range values.
+The API's `syncLocal()` still defaults to `all`, while the CLI defaults to `local`.
+`runShellCmd` retains shell execution by default; internal Git/package-manager
+commands explicitly pass `shell: false` so names and paths remain literal arguments.
 
 Workspace discovery reads fresh manifests on each call and includes the root
 package once. Yarn Classic object-form workspaces (`{ "packages": [...] }`) are

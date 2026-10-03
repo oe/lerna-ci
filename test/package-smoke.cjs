@@ -31,7 +31,9 @@ async function main() {
     const manifest = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'))
     assert.strictEqual(manifest.main, 'dist/index.js')
     assert.strictEqual(manifest.typings, 'dist/index.d.ts')
-    assert.strictEqual(manifest.bin, './dist/bin/index.js')
+    // npm may normalize the string shorthand to a bin-name map on installation.
+    const cliEntry = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.['lerna-ci']
+    assert.strictEqual(cliEntry, './dist/bin/index.js')
     for (const omitted of ['src', 'test', 'scripts', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'vite.config.mts', 'eslint.config.mjs']) {
       assert.strictEqual(fs.existsSync(path.join(packageDir, omitted)), false, `${omitted} should not be shipped`)
     }
@@ -55,7 +57,7 @@ async function main() {
     assert.strictEqual(api.maxVersion('1.0.0', '2.0.0'), '2.0.0')
     const cli = path.join(dir, 'node_modules/.bin', process.platform === 'win32' ? 'lerna-ci.cmd' : 'lerna-ci')
     assert.match(run(cli, ['--help'], dir), /lerna-ci <cmd>/)
-    assert.match(run(process.execPath, [path.join(packageDir, manifest.bin), '--help'], dir), /lerna-ci <cmd>/)
+    assert.match(run(process.execPath, [path.join(packageDir, cliEntry), '--help'], dir), /lerna-ci <cmd>/)
     if (!process.argv.includes('--runtime-only')) {
       fs.writeFileSync(path.join(dir, 'consumer.ts'), [
         "import { syncLocal, syncDeps, getRepoNpmClient, getVersionTransformer, runShellCmd, EVerSource } from 'lerna-ci'",

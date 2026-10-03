@@ -102,7 +102,7 @@ test('recursive file search preserves candidates while checking ancestor directo
   assert.strictEqual(api.findFileRecursive(names, nested), path.join(dir, 'package.json'))
   assert.deepStrictEqual(names, ['missing.json', 'package.json'])
 }))
-test('syncLocal defaults to local versions and preserves files in check-only mode', () => fixture(async dir => {
+test('syncLocal with an explicit local source preserves files in check-only mode', () => fixture(async dir => {
   write(path.join(dir, 'packages/a'), { name: '@app/a', version: '2.0.0' })
   write(path.join(dir, 'packages/b'), { name: '@app/b', version: '1.0.0', dependencies: { '@app/a': '^1.0.0' } })
   const file = path.join(dir, 'packages/b/package.json')
@@ -110,14 +110,56 @@ test('syncLocal defaults to local versions and preserves files in check-only mod
   let registryRequests = 0
   await patch(utils, 'runShellCmd', async () => { registryRequests++; throw new Error('unexpected registry request') }, async () => {
     await patch(utils, 'syncPruneGitTags', async () => { throw new Error('unexpected Git fetch') }, async () => {
-      assert.strictEqual((await api.syncLocal({ checkOnly: true })).length, 1)
+      assert.strictEqual((await api.syncLocal({ versionSource: 'local', checkOnly: true })).length, 1)
       assert.strictEqual(fs.readFileSync(file, 'utf8'), before)
-      await api.syncLocal()
+      await api.syncLocal({ versionSource: 'local' })
       assert.strictEqual(JSON.parse(fs.readFileSync(file)).dependencies['@app/a'], '^2.0.0')
-      assert.strictEqual(await api.syncLocal(), false)
+      assert.strictEqual(await api.syncLocal({ versionSource: 'local' }), false)
       assert.strictEqual(registryRequests, 0)
     })
   })
+}))
+test('syncLocal API retains all-source recovery by default', () => fixture(async dir => {
+  write(path.join(dir, 'packages/a'), { name: '@app/a', version: '2.0.0' })
+  write(path.join(dir, 'packages/b'), { name: '@app/b', version: '1.0.0', dependencies: { '@app/a': '^2.0.0' } })
+  const registry = require(path.join(dist, 'common/get-package-version/npm'))
+  const tags = require(path.join(dist, 'common/get-package-version/git'))
+  let registryCalls = 0
+  let gitCalls = 0
+  const file = path.join(dir, 'packages/a/package.json')
+  const before = fs.readFileSync(file, 'utf8')
+  await patch(utils, 'getGitRoot', async () => dir, async () => {
+    await patch(registry, 'getVersionsFromRegistry', async ({ pkgNames, versionStrategy }) => {
+      registryCalls++
+      assert.deepStrictEqual(pkgNames, ['@app/a', '@app/b'])
+      assert.strictEqual(versionStrategy, 'latest')
+      return { '@app/a': '3.0.0' }
+    }, async () => {
+      await patch(tags, 'getPackageVersionsFromGit', async () => {
+        gitCalls++
+        return { '@app/a': '4.0.0' }
+      }, async () => {
+        const changes = await api.syncLocal({ checkOnly: true })
+        assert.strictEqual(changes.find(pkg => pkg.name === '@app/a').changes[0].changes[0].newVersion, '4.0.0')
+        assert.strictEqual(changes.find(pkg => pkg.name === '@app/b').changes[0].changes[0].newVersion, '^4.0.0')
+        assert.strictEqual(fs.readFileSync(file, 'utf8'), before)
+      })
+    })
+  })
+  assert.strictEqual(registryCalls, 1)
+  assert.strictEqual(gitCalls, 1)
+}))
+test('a pnpm workspace outside the Git repository cannot take over its project root', () => fixture(async dir => {
+  fs.writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'packages: [repos/*]\n')
+  const repo = path.join(dir, 'repos/independent')
+  write(repo, { name: 'independent', private: true, dependencies: { react: '^1.0.0' } })
+  const init = spawnSync('git', ['init', repo], { encoding: 'utf8' })
+  assert.strictEqual(init.status, 0, init.stderr)
+  process.chdir(repo)
+  assert.strictEqual(await api.getProjectRoot(), repo)
+  await api.syncDeps({ versionMap: { react: '2.0.0' } })
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(repo, 'package.json'))).dependencies.react, '^2.0.0')
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).name, 'root')
 }))
 for (const [oldVersion, newVersion, expectedChange] of [
   ['^1.0.0', '1.5.0', false], ['^1.0.0', '2.0.0', true],
@@ -276,16 +318,30 @@ test('Git max-stable ignores malformed tags and prefers a stable release', async
   })
   })
 })
-test('command arguments are literal, including spaces and shell substitutions', async () => {
+test('shell:false passes literal arguments, including spaces and shell substitutions', async () => {
   const argument = 'hello world; echo injected $(echo substituted) & | "quoted"'
-  assert.strictEqual(await api.runShellCmd(process.execPath, ['-e', 'process.stdout.write(process.argv[1])', argument]), argument)
+  assert.strictEqual(await api.runShellCmd(process.execPath, ['-e', 'process.stdout.write(process.argv[1])', argument], { shell: false }), argument)
 })
+test('runShellCmd retains shell redirection for existing API consumers', () => fixture(async dir => {
+  const file = path.join(dir, 'legacy output.txt')
+  await api.runShellCmd(`echo legacy > "${file}"`)
+  assert.strictEqual(fs.readFileSync(file, 'utf8').trim(), 'legacy')
+}))
+test('registry commands explicitly disable the shell for untrusted package arguments', () => fixture(async () => {
+  await patch(utils, 'runShellCmd', async (_cmd, args, options) => {
+    assert.strictEqual(options.shell, false)
+    assert.strictEqual(args.includes('pkg; echo injected'), true)
+    return JSON.stringify('1.0.0')
+  }, async () => {
+    assert.strictEqual(await npm.getPkgVersion({ pkgName: 'pkg; echo injected', versionStrategy: 'latest' }), '1.0.0')
+  })
+}))
 test('commands reject missing executables and unsuccessful exit codes', async () => {
-  await assert.rejects(api.runShellCmd('lerna-ci-no-such-command'), error => error.code === 'ENOENT')
-  await assert.rejects(api.runShellCmd(process.execPath, ['-e', 'process.stderr.write("failure");process.exit(2)']), error => String(error).includes('error code: 2'))
+  await assert.rejects(api.runShellCmd('lerna-ci-no-such-command', { shell: false }), error => error.code === 'ENOENT')
+  await assert.rejects(api.runShellCmd(process.execPath, ['-e', 'process.stderr.write("failure");process.exit(2)'], { shell: false }), error => String(error).includes('error code: 2'))
 })
 if (process.platform !== 'win32') test('signal-terminated commands reject rather than report success', async () => {
-  await assert.rejects(api.runShellCmd(process.execPath, ['-e', 'process.kill(process.pid,"SIGTERM")']), error => String(error).includes('SIGTERM'))
+  await assert.rejects(api.runShellCmd(process.execPath, ['-e', 'process.kill(process.pid,"SIGTERM")'], { shell: false }), error => String(error).includes('SIGTERM'))
 })
 async function publishMock(status, revisionCounts, run, pkgs = [], registry = async () => '[]') {
   await patch(utils, 'syncPruneGitTags', async () => {}, async () => {
@@ -372,8 +428,8 @@ test('Changesets status uses separate temporary files and cleans up concurrent r
 test('syncLocal updates satisfying ranges by default and can preserve them with exact=false', () => fixture(async dir => {
   write(path.join(dir, 'packages/a'), { name: '@app/a', version: '1.5.0' })
   write(path.join(dir, 'packages/b'), { name: '@app/b', version: '1.0.0', dependencies: { '@app/a': '^1.0.0' } })
-  assert.strictEqual(await api.syncLocal({ exact: false }), false)
-  assert.strictEqual((await api.syncLocal()).length, 1)
+  assert.strictEqual(await api.syncLocal({ versionSource: 'local', exact: false }), false)
+  assert.strictEqual((await api.syncLocal({ versionSource: 'local' })).length, 1)
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'packages/b/package.json'))).dependencies['@app/a'], '^1.5.0')
 }))
 
@@ -382,7 +438,7 @@ if (process.platform === 'win32') test('Windows cmd shims receive paths and argu
   const shim = path.join(dir, 'echo arguments.cmd')
   fs.writeFileSync(script, 'process.stdout.write(process.argv[2])')
   fs.writeFileSync(shim, '@echo off\r\nnode "%~dp0echo arguments.cjs" %*\r\n')
-  assert.strictEqual(await api.runShellCmd(shim, ['a workspace with spaces']), 'a workspace with spaces')
+  assert.strictEqual(await api.runShellCmd(shim, ['a workspace with spaces'], { shell: false }), 'a workspace with spaces')
 }))
 
 test('native workspace discovery resolves Git once and still reads fresh manifests', () => fixture(async dir => {
@@ -544,9 +600,9 @@ test('syncLocal updates semver catalog entries and preserves newer pnpm workspac
     devDependencies: { '@app/a': 'catalog:linked' }, optionalDependencies: { '@app/a': 'catalog:local' }, peerDependencies: { '@app/a': 'catalog:symlink' } } },
   async (dir, file) => {
     const before = fs.readFileSync(file, 'utf8')
-    assert.strictEqual((await api.syncLocal({ checkOnly: true })).length, 1)
+    assert.strictEqual((await api.syncLocal({ versionSource: 'local', checkOnly: true })).length, 1)
     assert.strictEqual(fs.readFileSync(file, 'utf8'), before)
-    await api.syncLocal()
+    await api.syncLocal({ versionSource: 'local' })
     assert.strictEqual(fs.readFileSync(file, 'utf8'), before.replace('^1.0.0', '^2.0.0'))
     assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'packages/b/package.json'))).dependencies['@app/a'], 'catalog:')
   }
@@ -615,6 +671,26 @@ test('pnpm without catalogs retains ordinary dependency synchronization by defau
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).dependencies.react, '^2.0.0')
   assert.strictEqual(fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')), false)
 }))
+test('pnpm without catalogs does not expand unrelated YAML alias graphs', () => catalogFixture(
+  `packages: [packages/*]\nshared: &shared [one, two]\notherSetting: [${Array(101).fill('*shared').join(', ')}]\n`,
+  { 'packages/app': { name: 'app', dependencies: { react: '^1.0.0' } } },
+  async dir => {
+    assert.strictEqual((await api.syncDeps({ versionMap: { react: '2.0.0' } })).length, 1)
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'packages/app/package.json'))).dependencies.react, '^2.0.0')
+  },
+))
+test('large catalog updates preserve every entry and surrounding comments', () => {
+  const entries = Array.from({ length: 1000 }, (_item, i) => `  pkg-${i}: "^1.0.0" # entry ${i}`)
+  const targets = Object.fromEntries(entries.map((_entry, i) => [`pkg-${i}`, '2.0.0']))
+  return catalogFixture(`# before\ncatalog:\n${entries.join('\n')}\n# after\n`, {}, async (_dir, file) => {
+    const before = fs.readFileSync(file, 'utf8')
+    const preview = await api.syncDeps({ versionMap: targets, checkOnly: true })
+    assert.strictEqual(preview[0].changes[0].changes.length, 1000)
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), before)
+    await api.syncDeps({ versionMap: targets })
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), before.split('^1.0.0').join('^2.0.0'))
+  })
+})
 
 test('a dangling pnpm catalog reference without a workspace file fails before writing', () => fixture(async dir => {
   write(dir, { name: 'root', private: true, packageManager: 'pnpm@10.34.6', dependencies: { react: 'catalog:', direct: '^1.0.0' } })

@@ -3,7 +3,7 @@ import { IGetPkgVersionFromRegistry, getMaxStableVersion } from './common'
 
 export const getPkgVersion: IGetPkgVersionFromRegistry = async (options): Promise<string> => {
   const result = await runShellCmd('yarn',
-    ['npm', 'info', options.pkgName, '--fields', options.versionStrategy === 'latest' && !options.version ? 'version' : 'versions', '--json'])
+    ['npm', 'info', options.pkgName, '--fields', options.versionStrategy === 'latest' && !options.version ? 'version' : 'versions', '--json'], { shell: false })
   const content = JSON.parse(result)
   if (options.version) {
     const versions = Array.isArray(content.versions) ? content.versions : [content.versions]

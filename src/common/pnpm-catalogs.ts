@@ -19,6 +19,10 @@ export async function readPnpmCatalogs(rootPath: string) {
   const content = fs.readFileSync(file, 'utf8')
   const document = yaml.parseDocument(content, { merge: true })
   if (document.errors.length) throw new Error(`Invalid ${file}: ${document.errors[0].message}`)
+  // Do not convert unrelated pnpm settings (including potentially large alias
+  // graphs) when the workspace does not define catalogs. Root merges may define
+  // catalogs indirectly, so they still need inspection.
+  if (!document.has('catalog') && !document.has('catalogs') && !document.has('<<')) return undefined
   const manifest = document.toJS({ maxAliasCount: 100 }) || {}
   assertMap(manifest, 'pnpm workspace manifest')
   if (manifest.catalogs != null) assertMap(manifest.catalogs, 'catalogs')
@@ -80,19 +84,24 @@ export function validateCatalogReferences(context: IPnpmCatalogs, packages: IPac
 /** Edit only version tokens so comments, quoting, other settings and CRLF survive. */
 export function planCatalogUpdates(context: IPnpmCatalogs, versions: IVersionMap, versionTransform: IVerTransform, exact?: boolean) {
   if (!context) return undefined
-  const { isNode, isScalar, stringify } = context.yaml
+  const { isNode, isMap, isScalar, stringify } = context.yaml
   const categories: IChangedCategory[] = []
   const edits: { start: number; end: number; value: string }[] = []
   for (const catalog of context.catalogs.values()) {
     const changes = updateDepsVersion({ dependencies: { ...catalog.versions }, versions, versionTransform, exact })
     if (!changes) continue
     categories.push({ field: catalog.path.join('.'), changes })
+    const mapping = context.document.getIn(catalog.path, true)
+    // YAMLMap.get scans its pairs linearly. Index once for large catalogs.
+    const nodes = new Map(isMap(mapping) ? mapping.items.map(pair => [
+      isScalar(pair.key) ? String(pair.key.value) : '', pair.value,
+    ] as const) : [])
+    const anchoredParent = catalog.path.some((_key, index) => {
+      const parent = context.document.getIn(catalog.path.slice(0, index + 1), true)
+      return isNode(parent) && 'anchor' in parent && !!parent.anchor
+    })
     for (const change of changes) {
-      const node = context.document.getIn([...catalog.path, change.name], true)
-      const anchoredParent = catalog.path.some((_key, index) => {
-        const parent = context.document.getIn(catalog.path.slice(0, index + 1), true)
-        return isNode(parent) && 'anchor' in parent && !!parent.anchor
-      })
+      const node = nodes.get(change.name)
       // Updating a shared anchor would also change unrelated settings. Fail before writing.
       if (!isScalar(node) || !node.range || node.anchor || anchoredParent || node.type === 'BLOCK_LITERAL' || node.type === 'BLOCK_FOLDED') {
         throw new Error(`Cannot safely update catalog ${catalog.name} entry ${change.name}: use a direct single-line scalar without a YAML anchor or merge`)
@@ -103,10 +112,15 @@ export function planCatalogUpdates(context: IPnpmCatalogs, versions: IVersionMap
     }
   }
   if (!categories.length) return undefined
-  let content = context.content
-  for (const edit of edits.sort((a, b) => b.start - a.start)) {
-    content = content.slice(0, edit.start) + edit.value + content.slice(edit.end)
+  // Assemble once instead of copying the whole workspace file for every edit.
+  const parts: string[] = []
+  let cursor = 0
+  for (const edit of edits.sort((a, b) => a.start - b.start)) {
+    parts.push(context.content.slice(cursor, edit.start), edit.value)
+    cursor = edit.end
   }
+  parts.push(context.content.slice(cursor))
+  const content = parts.join('')
   const change: IChangedPackage = {
     name: 'pnpm-workspace.yaml', location: context.rootPath, private: true, changes: categories,
   }
