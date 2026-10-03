@@ -603,16 +603,46 @@ If you are updating from `0.0.x`, you should be careful about following changes:
 
 ## Development and validation
 
+Development uses pnpm 10, TypeScript 6, Vite 8, ESLint 10 with flat configuration,
+and tsx. Use Node 22.13+ in the Node 22 series or Node 24+ for development; the
+published library and CLI still support Node >=14.6. `.node-version` selects Node 24.
+
 ```sh
-yarn install --frozen-lockfile --ignore-scripts
-yarn test
-npm pack --dry-run
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build          # CommonJS modules, declarations, executable CLI
+pnpm dev:build      # Vite watch mode
+pnpm typecheck     # source and tooling configuration types
+pnpm test          # lint, tooling types, build, offline regressions
+pnpm test:package  # pack, isolated consumer, imports, CLI, public types
 ```
 
-`yarn test` builds the library and runs offline regression tests against temporary
-workspaces, the compiled CLI, registry responses, and Git publish checks. CI runs
-on Node 14.6 (the minimum supported runtime), 22, and 24, plus Windows on Node 22.
-Node 14 is end-of-life; use a maintained Node release for new projects.
+Vite preserves the existing `dist/index.js`, `dist/index.d.ts`, CLI entry point,
+and module paths. Runtime dependencies stay external. The version-source enum is available at runtime
+and its declarations work with `isolatedModules` (including Vite consumers). `tsc` emits declarations
+and checks source types; Vite handles JavaScript. `prepack` validates lint and
+tooling types before building, and the `files` allowlist publishes only `dist`
+plus npm's standard manifest, README, and license files. pnpm pins its own version
+and stores reproducible dependency resolution in `pnpm-lock.yaml`.
+
+The regression suite uses temporary workspaces and mocked registry processes.
+Package tests install the tarball into a separate consumer and verify CommonJS,
+native ESM imports, the installed CLI, TypeScript usage, and the regression suite.
+CI covers Node 14.6 (the minimum runtime), 22, and 24, plus Windows on Node 22;
+modern build tools run on Node 22 before switching to the legacy runtime.
+
+Workspace scans resolve the project root once per operation and continue to read
+fresh manifests. A local 51-package benchmark (20 measured samples after warmup)
+reduced median scan time from 28.8 ms to 9.7 ms and Git subprocesses from seven to
+one; timings depend on the host and repository. Registry lookups deduplicate
+package names and keep up to six requests active without waiting for an entire
+batch, while preserving result order. Explicit wildcard version overrides also
+avoid redundant registry requests.
+
+Runtime `cosmiconfig` and `find-packages` are updated to compatible releases;
+TypeScript-only dependencies are development dependencies, and Node's filesystem
+APIs replace rimraf. Newer ESM-only or higher-Node versions of detect-indent and
+yargs are intentionally deferred to preserve CommonJS and Node 14.6 support.
 
 The `--exact false` option preserves an existing dependency range when it contains
 the target version or target range. Explicit range strategies such as `--range '~'`

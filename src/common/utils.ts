@@ -77,7 +77,7 @@ export function runShellCmd (cmd: string, args?: string[] | SpawnOptions, option
 export function findFileRecursive (fileName: string | string[], dir = process.cwd(), isDir = false): string {
   // const filepath = path.join(dir, fileName)
   const fileNames = Array.isArray(fileName) ? fileName.slice() : [fileName]
-  let f: string | undefined = ''
+  let f: string | undefined
   // tslint:disable-next-line:no-conditional-assignment
   while ((f = fileNames.shift())) {
     const filepath = path.join(dir, f)
@@ -85,7 +85,7 @@ export function findFileRecursive (fileName: string | string[], dir = process.cw
       const stat = fs.statSync(filepath)
       const isFound = isDir ? stat.isDirectory() : stat.isFile()
       if (isFound) return filepath
-    } catch (e) {
+    } catch {
       // xxx
     }
   }
@@ -129,7 +129,7 @@ export async function getGitRoot(): Promise<string | false> {
   try {
     const result = await runShellCmd('git', ['rev-parse', '--show-toplevel'])
     return result.trim()
-  } catch (error) {
+  } catch {
     return false
   }
 }
@@ -141,7 +141,7 @@ export function pickOne<V>(list: V[], compare: ((a: V, b: V) => number)): V | un
   const arr = list.slice(0)
   return arr.reduce((acc, cur) => {
     return compare(acc, cur) >= 0 ? acc : cur
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
   }, arr.shift()!)
 }
 
@@ -153,7 +153,7 @@ export function maxVersion(...vers: (string | undefined)[]) {
 /**
  * get parsed package.json in a package
  * @param pkgPath package location
- * @returns 
+ * @returns
  */
 export function readPackageJson(pkgPath: string) {
   const pkgJsonPath = path.join(pkgPath, 'package.json')
@@ -164,7 +164,7 @@ export function readPackageJson(pkgPath: string) {
   try {
     const content = fs.readFileSync(pkgJsonPath, 'utf8')
     return JSON.parse(content)
-  } catch (error) {
+  } catch {
     throw new Error(`project root's package.json is corrupted, located in ${pkgPath}`)
   }
 }

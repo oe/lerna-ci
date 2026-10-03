@@ -3,7 +3,6 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const rimraf = require('rimraf')
 const dist = process.env.LERNA_CI_DIST || path.resolve(__dirname, '../dist')
 const api = require(dist)
 const utils = require(path.join(dist, 'common/utils'))
@@ -24,7 +23,7 @@ async function fixture(run, json = { name: 'root', version: '1.0.0', private: tr
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lerna-ci regression '))
   write(dir, json)
   process.chdir(dir)
-  try { await run(dir) } finally { process.chdir(cwd); rimraf.sync(dir) }
+  try { await run(dir) } finally { process.chdir(cwd); fs.rmSync ? fs.rmSync(dir, { recursive: true, force: true }) : fs.rmdirSync(dir, { recursive: true }) }
 }
 async function patch(object, key, replacement, run) {
   const original = object[key]
@@ -91,13 +90,15 @@ test('syncLocal defaults to local versions and preserves files in check-only mod
   write(path.join(dir, 'packages/b'), { name: '@app/b', version: '1.0.0', dependencies: { '@app/a': '^1.0.0' } })
   const file = path.join(dir, 'packages/b/package.json')
   const before = fs.readFileSync(file, 'utf8')
-  await patch(npm, 'getPkgVersion', async () => { throw new Error('unexpected registry request') }, async () => {
+  let registryRequests = 0
+  await patch(utils, 'runShellCmd', async () => { registryRequests++; throw new Error('unexpected registry request') }, async () => {
     await patch(utils, 'syncPruneGitTags', async () => { throw new Error('unexpected Git fetch') }, async () => {
       assert.strictEqual((await api.syncLocal({ checkOnly: true })).length, 1)
       assert.strictEqual(fs.readFileSync(file, 'utf8'), before)
       await api.syncLocal()
       assert.strictEqual(JSON.parse(fs.readFileSync(file)).dependencies['@app/a'], '^2.0.0')
       assert.strictEqual(await api.syncLocal(), false)
+      assert.strictEqual(registryRequests, 0)
     })
   })
 }))
@@ -176,7 +177,7 @@ test('CLI synclocal uses configured ranges and lets CLI flags override them', ()
 test('registry batching preserves caller arrays and results across multiple batches', async () => {
   const names = Array.from({ length: 14 }, (_, i) => `package-${i}`)
   const before = names.slice()
-  await patch(npm, 'getPkgVersion', async () => '1.0.0', async () => {
+  await patch(utils, 'runShellCmd', async () => JSON.stringify('1.0.0'), async () => {
     const result = await api.getVersionsFromRegistry({ pkgNames: names, npmClient: 'npm' })
     assert.deepStrictEqual(names, before)
     assert.deepStrictEqual(Object.keys(result), before)
@@ -222,11 +223,12 @@ test('commands reject missing executables and unsuccessful exit codes', async ()
 if (process.platform !== 'win32') test('signal-terminated commands reject rather than report success', async () => {
   await assert.rejects(api.runShellCmd(process.execPath, ['-e', 'process.kill(process.pid,"SIGTERM")']), error => String(error).includes('SIGTERM'))
 })
-async function publishMock(status, revisionCounts, run, pkgs = []) {
+async function publishMock(status, revisionCounts, run, pkgs = [], registry = async () => '[]') {
   await patch(utils, 'syncPruneGitTags', async () => {}, async () => {
   await patch(utils, 'getGitRoot', async () => '/repo', async () => {
     await patch(changed, 'getChanged', async () => pkgs, async () => {
-      await patch(utils, 'runShellCmd', async (_cmd, args) => {
+      await patch(utils, 'runShellCmd', async (cmd, args) => {
+        if (cmd === 'npm') return registry(args)
         if (args[0] === 'status') return status
         if (args[0] === 'rev-list') return revisionCounts
         return ''
@@ -253,20 +255,18 @@ test('canPublish uses revision counts for ahead, behind, and diverged branches',
   }
 })
 test('canPublish fails when the registry cannot verify next-version availability', () => fixture(async dir => {
-  await patch(npm, 'getPkgVersion', async () => { throw new Error('registry E401') }, async () => {
-    await publishMock('', '0\t0', async () => {
-      await assert.rejects(api.canPublish({ releaseType: 'patch' }), /E401/)
-    }, [{ name: 'root', version: '1.0.0', private: false, location: dir }])
-  })
+  await publishMock('', '0\t0', async () => {
+    await assert.rejects(api.canPublish({ releaseType: 'patch' }), /E401/)
+  }, [{ name: 'root', version: '1.0.0', private: false, location: dir }], async () => { throw new Error('registry E401') })
 }))
 test('registry missing-package and existing-version responses are distinguished', () => fixture(async dir => {
   const pkgs = [{ name: 'root', version: '1.0.0', private: false, location: dir }]
-  await patch(npm, 'getPkgVersion', async () => { throw new Error('registry E404') }, async () => {
-    await publishMock('', '0\t0', async () => { assert.strictEqual((await api.canPublish({ releaseType: 'patch' })).eligible, true) }, pkgs)
-  })
-  await patch(npm, 'getPkgVersion', async () => '1.0.1', async () => {
-    await publishMock('', '0\t0', async () => { assert.strictEqual((await api.canPublish({ releaseType: 'patch' })).eligible, false) }, pkgs)
-  })
+  await publishMock('', '0\t0', async () => {
+    assert.strictEqual((await api.canPublish({ releaseType: 'patch' })).eligible, true)
+  }, pkgs, async () => { throw new Error('registry E404') })
+  await publishMock('', '0\t0', async () => {
+    assert.strictEqual((await api.canPublish({ releaseType: 'patch' })).eligible, false)
+  }, pkgs, async () => JSON.stringify(['1.0.1']))
 }))
 
 test('normal workspace brace expansion works and deeply nested patterns are rejected', () => fixture(async dir => {
@@ -319,6 +319,95 @@ if (process.platform === 'win32') test('Windows cmd shims receive paths and argu
   fs.writeFileSync(script, 'process.stdout.write(process.argv[2])')
   fs.writeFileSync(shim, '@echo off\r\nnode "%~dp0echo arguments.cjs" %*\r\n')
   assert.strictEqual(await api.runShellCmd(shim, ['a workspace with spaces']), 'a workspace with spaces')
+}))
+
+test('native workspace discovery resolves Git once and still reads fresh manifests', () => fixture(async dir => {
+  const childProcess = require('child_process')
+  const spawn = childProcess.spawn
+  let gitCalls = 0
+  await patch(childProcess, 'spawn', (cmd, ...args) => {
+    if (cmd === 'git') gitCalls++
+    return spawn(cmd, ...args)
+  }, async () => {
+    await api.getAllPackageDigests()
+    assert.strictEqual(gitCalls, 1)
+    write(dir, { name: 'root', version: '2.0.0', private: true })
+    assert.strictEqual((await api.getAllPackageDigests())[0].version, '2.0.0')
+  })
+}))
+test('registry lookups deduplicate names, maintain result order, and keep the concurrency limit', async () => {
+  const names = Array.from({ length: 14 }, (_, index) => `package-${index}`)
+  const input = [...names, names[0], names[6]]
+  const before = input.slice()
+  const events = []
+  let active = 0
+  let maximum = 0
+  await patch(utils, 'runShellCmd', async (_cmd, args) => {
+    const name = args[1]
+    events.push(`start:${name}`)
+    maximum = Math.max(maximum, ++active)
+    await new Promise(resolve => setTimeout(resolve, name === names[0] ? 100 : 5))
+    active--
+    events.push(`end:${name}`)
+    return JSON.stringify('1.0.0')
+  }, async () => {
+    const result = await api.getVersionsFromRegistry({ pkgNames: input, npmClient: 'npm' })
+    assert.deepStrictEqual(input, before)
+    assert.deepStrictEqual(Object.keys(result), names)
+    assert.strictEqual(events.filter(event => event.startsWith('start:')).length, names.length)
+    assert.strictEqual(maximum, 6)
+    assert.ok(events.indexOf(`start:${names[6]}`) < events.indexOf(`end:${names[0]}`))
+  })
+})
+test('explicit wildcard versions do not trigger redundant registry requests', () => fixture(async dir => {
+  write(dir, { name: 'root', version: '1.0.0', dependencies: { '@app/a': '^1.0.0' } })
+  let requests = 0
+  await patch(utils, 'runShellCmd', async () => { requests++; return JSON.stringify('9.0.0') }, async () => {
+    await api.syncDeps({ packageNames: ['@app/a'], versionMap: { '@app/*': '2.0.0' } })
+    assert.strictEqual(requests, 0)
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).dependencies['@app/a'], '^2.0.0')
+  })
+}))
+
+test('version-source enum is available to JavaScript consumers', () => {
+  assert.deepStrictEqual(api.EVerSource, { ALL: 'all', LOCAL: 'local', NPM: 'npm', GIT: 'git' })
+})
+
+test('workspace discovery retains JSON5, YAML, exclusions, and locale-based ordering', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, workspaces: ['packages/*', '!packages/excluded'] })
+  write(path.join(dir, 'packages/excluded'), { name: 'excluded', version: '1.0.0' })
+  const manifests = [
+    ['Z', 'package.json5', "{name: 'json5', version: '1.0.0', private: true}"],
+    ['a', 'package.yaml', 'name: yaml\nversion: 2.0.0\n'],
+  ]
+  for (const [folder, filename, content] of manifests) {
+    fs.mkdirSync(path.join(dir, 'packages', folder), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'packages', folder, filename), content)
+  }
+  const pkgs = await api.getAllPackageDigests()
+  const expected = manifests.map(([folder]) => path.join(dir, 'packages', folder)).sort((a, b) => a.localeCompare(b))
+  assert.deepStrictEqual(pkgs.slice(0, -1).map(pkg => pkg.location), expected)
+  assert.deepStrictEqual(pkgs.map(pkg => pkg.name).sort(), ['json5', 'root', 'yaml'])
+}))
+test('YAML configuration is found from a nested working directory', () => fixture(async dir => {
+  fs.writeFileSync(path.join(dir, '.lerna-circ.yaml'), 'synclocal:\n  versionSource: local\n  versionRangeStrategy: "~"\n')
+  const nested = path.join(dir, 'nested/deep')
+  fs.mkdirSync(nested, { recursive: true })
+  process.chdir(nested)
+  assert.deepStrictEqual(await getCliConfig(), { synclocal: { versionSource: 'local', versionRangeStrategy: '~' } })
+}))
+test('fixpack preserves formatting options and supports dry-run without writing', () => fixture(async dir => {
+  write(dir, { version: '1.0.0', name: 'root', private: true, dependencies: { z: '1.0.0', a: '1.0.0' } })
+  const config = require(path.join(dist, 'fixpack-all/config')).default
+  const file = path.join(dir, 'package.json')
+  const before = fs.readFileSync(file, 'utf8')
+  await api.fixpack({ config: { ...config, quiet: true, dryRun: true } })
+  assert.strictEqual(fs.readFileSync(file, 'utf8'), before)
+  await api.fixpack({ config: { ...config, quiet: true } })
+  const formatted = JSON.parse(fs.readFileSync(file, 'utf8'))
+  assert.deepStrictEqual(Object.keys(formatted).slice(0, 2), ['name', 'version'])
+  assert.deepStrictEqual(Object.keys(formatted.dependencies), ['a', 'z'])
+  assert.deepStrictEqual(await api.fixpack({ config: { ...config, quiet: true } }), [])
 }))
 
 ;(async () => {

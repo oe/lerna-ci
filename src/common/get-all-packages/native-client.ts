@@ -1,16 +1,16 @@
 import path from 'path'
 import fs from 'fs'
-import findPkgs from 'find-packages'
+import { findPackages as findPkgs } from 'find-packages'
 import { IPackageDigest } from '../types'
-import { getProjectRoot, readPackageJson, readRootPkgJson, runShellCmd } from '../utils'
+import { getProjectRoot, readPackageJson, runShellCmd } from '../utils'
 import { getRepoNpmClient } from '../get-package-version/npm'
 /**
  * get all package's info in a lerna project
  */
-export async function getAllPackages(): Promise<IPackageDigest[] | false> {
-  const rootPath = await getProjectRoot()
-  const pkgJson = await readRootPkgJson()
-  const client = await getRepoNpmClient()
+export async function getAllPackages(rootPath?: string): Promise<IPackageDigest[] | false> {
+  rootPath = rootPath || await getProjectRoot()
+  const pkgJson = readPackageJson(rootPath)
+  const client = await getRepoNpmClient(rootPath)
   if (fs.existsSync(path.join(rootPath, 'pnpm-workspace.yaml'))) {
     return await getPackagesViaPnpm(rootPath)
   }
@@ -23,7 +23,7 @@ export async function getAllPackages(): Promise<IPackageDigest[] | false> {
     case 'yarn-next':
       return await getPackagesViaYarnNext(rootPath)
     case 'pnpm':
-    case 'npm':    
+    case 'npm':
       return await getPackagesViaGlob(rootPath, workspacePatterns)
     default:
       return false
@@ -56,7 +56,7 @@ async function getPackagesViaYarnNext(rootPath: string): Promise<IPackageDigest[
   const content = await runShellCmd('yarn', ['workspaces', 'list', '--json'], {
     cwd: rootPath,
   })
-  
+
   try {
     const pkgs = content.trim().split('\n')
       .map(line => JSON.parse(line))
@@ -81,7 +81,7 @@ async function getPackagesViaPnpm(rootPath: string): Promise<IPackageDigest[]> {
   const content = await runShellCmd('pnpm', ['m', 'ls', '--json'], {
     cwd: rootPath,
   })
-  
+
   try {
     const pkgs = JSON.parse(content)
     return pkgs.map(pkg => {
@@ -122,7 +122,7 @@ async function getPackagesViaGlob(rootPath: string, workspacePatterns: string[])
   const pkgs = await findPkgs(rootPath, {
     patterns: workspacePatterns
   })
-  return pkgs.map(pkg => ({
+  return pkgs.sort((a, b) => a.dir.localeCompare(b.dir)).map(pkg => ({
     name: pkg.manifest.name || '',
     version: pkg.manifest.version || '',
     private: !!pkg.manifest.private,

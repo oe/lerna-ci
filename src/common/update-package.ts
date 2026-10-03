@@ -23,9 +23,9 @@ export function getVersionTransformer(rangeStrategy?: IVersionRangeStrategy) {
   return (pkgName: string, oldVersion: string, newVersion: string) => {
     // if existing version not a valid semver version, like *, workspace:*, use existing version
     if (oldVersion === '*' || !semver.validRange(oldVersion)) return oldVersion
-    if (/^\d/.test(newVersion)) return (`${rangeStrategy || ''}${newVersion}`).replace(/^\=/, '')
+    if (/^\d/.test(newVersion)) return (`${rangeStrategy || ''}${newVersion}`).replace(/^=/, '')
     // remove = for OCD patient
-    if (/^\=\d/.test(newVersion)) return newVersion.replace('=', '')
+    if (/^=\d/.test(newVersion)) return newVersion.replace('=', '')
     return newVersion
   }
 }
@@ -183,12 +183,12 @@ function updateDepsVersion({ dependencies, versions, versionTransform, exact }: 
 
 /**
  * get version by name from versions map
- * 
+ *
  * @example
  *  versionMap: { '@parcel/*': '^2.3.0', '@parcel/core': '^2.4.0' }
  * return  '^2.4.0' if name is @parcel/core
  * return  '^2.3.0' if name is @parcel/css
- * 
+ *
  * @param versionMap version map
  * @param name package name
  * @returns matched version if found

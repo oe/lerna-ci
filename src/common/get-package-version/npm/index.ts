@@ -1,7 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 import { IGetPkgVersionFromRegistryOptions } from './common'
-import { runShellCmd, getProjectRoot, readRootPkgJson } from '../../utils'
+import { runShellCmd, getProjectRoot, readPackageJson } from '../../utils'
 import { IVersionPickStrategy, IVersionMap } from '../../types'
 import { logger } from '../../logger'
 import * as npm from './npm'
@@ -44,19 +44,24 @@ export async function getVersionsFromRegistry({ pkgNames, versionStrategy, npmCl
   if (!processors[client]) {
     throw new Error('unsupported npm client: ' + client)
   }
-  for (let offset = 0; offset < pkgNames.length; offset += 6) {
-    const items = pkgNames.slice(offset, offset + 6)
-    const vers = await Promise.all(items.map(name => getVersionFormRegistry({
-      pkgName: name,
-      versionStrategy: versionStrategy || 'max',
-      // @ts-ignore
-      npmClient: client
-    })))
-    vers.forEach((ver, idx) => {
-      if (!ver) return
-      result[items[idx]] = ver
-    })
+  const names = Array.from(new Set(pkgNames))
+  const versions: Array<string | undefined> = new Array(names.length)
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < names.length) {
+      const index = cursor++
+      versions[index] = await getVersionFormRegistry({
+        pkgName: names[index],
+        versionStrategy: versionStrategy || 'max',
+        npmClient: client
+      })
+    }
   }
+  await Promise.all(Array.from({ length: Math.min(6, names.length) }, worker))
+  names.forEach((name, index) => {
+    const version = versions[index]
+    if (version) result[name] = version
+  })
   return result
 }
 
@@ -82,12 +87,13 @@ export async function getVersionFormRegistry(
 /**
  * get lerna monorepo preferred npm client
  */
-export async function getRepoNpmClient(): Promise<INpmClient> {
-  let client = await try2ReadPkg()
+export async function getRepoNpmClient(rootDir?: string): Promise<INpmClient> {
+  rootDir = rootDir || await getProjectRoot()
+  let client = await try2ReadPkg(rootDir)
   if (client === false) {
-    client = await try2ReadClientCfg()
+    client = await try2ReadClientCfg(rootDir)
     if (client === false) {
-      client = await try2getLernaClient()
+      client = await try2getLernaClient(rootDir)
     }
   }
   if (!client) client = 'npm'
@@ -98,21 +104,19 @@ export async function getRepoNpmClient(): Promise<INpmClient> {
   return client as INpmClient
 }
 
-async function try2getLernaClient() {
-  const rootDir = await getProjectRoot()
+async function try2getLernaClient(rootDir: string) {
   const cfgPath = path.join(rootDir, 'lerna.json')
   if (!fs.existsSync(cfgPath)) return false
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const cfg = fs.readFileSync(cfgPath, 'utf8')
     return JSON.parse(cfg).npmClient
-  } catch (error) {
+  } catch {
     throw new Error('lerna.json maybe corrupted, unable to read its contents')
   }
 }
 
-async function try2ReadPkg() {
-  const pkgJson = await readRootPkgJson()
+async function try2ReadPkg(rootDir: string) {
+  const pkgJson = readPackageJson(rootDir)
   if (!pkgJson.packageManager) return false
   const [name, version] = pkgJson.packageManager.split('@')
   if (!SUPPORTED_NPM_CLIENTS.includes(name)) {
@@ -124,8 +128,7 @@ async function try2ReadPkg() {
   return name
 }
 
-async function try2ReadClientCfg() {
-  const rootDir = await getProjectRoot()
+async function try2ReadClientCfg(rootDir: string) {
   const files = await fs.promises.readdir(rootDir, { withFileTypes: true })
   const fileNames = files.filter(f => f.isFile()).map(f => f.name)
   if (fileNames.includes('yarn.lock')) return 'yarn'

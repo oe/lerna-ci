@@ -15,11 +15,11 @@ import {
 } from '../common'
 
 export interface ISyncDepOptions {
-  /** 
+  /**
    * package names that should update
    *  will fetch its version from npm by default
    *  package name can use asterisk, e.g. @babel/*
-   * 
+   *
    * @example
    *  ['duplex-message', '@typescript-eslint/parser', '@babel/*', '*plugin*', 'react*']
    */
@@ -66,15 +66,15 @@ const DEFAULT_OPTIONS: ISyncDepOptions = {
 export async function syncDeps(syncOptions: ISyncDepOptions): Promise<IChangedPackage[] | false> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
   const allPkgDigests = await getAllPackageDigests()
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
   let versionMap = options.versionMap!
   if (Array.isArray(options.packageNames) && options.packageNames.length) {
     const packageNames = flatPackageNames(options.packageNames, allPkgDigests)
     const pkgsHasVersion = Object.keys(versionMap)
-    const pkgsWithoutVersion = packageNames.filter(n => pkgsHasVersion.indexOf(n) === -1)
+    const pkgsWithoutVersion = packageNames.filter(n => !pkgsHasVersion.some(pattern => isPkgNameMatchingPattern(n, pattern)))
     if (pkgsWithoutVersion.length) {
       const versionFromNpm = await getVersionsFromRegistry({ pkgNames: pkgsWithoutVersion, versionStrategy: options.versionPickStrategy })
-      // add version range to versionFromNpm 
+      // add version range to versionFromNpm
       versionMap = Object.assign({}, versionFromNpm, versionMap)
     }
   }

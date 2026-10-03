@@ -42,24 +42,25 @@ export async function getAllPackageDigests(filter?: IPackageFilterOptions): Prom
 }
 
 async function getAllPkgDigests() {
-  let result = await lerna.getAllPackages()
+  const rootPath = await getProjectRoot()
+  let result = await lerna.getAllPackages(rootPath)
   if (result === false) {
-    result = await native.getAllPackages()
+    result = await native.getAllPackages(rootPath)
   }
   if (!result) {
     logger.warn('[lerna-ci] unable to get workspace packages, maybe current project not a monorepo')
     result = []
   }
   // Include the root package once.
-  const selfPkgDigest = await getRootPackageDigest()
+  const selfPkgDigest = await getRootPackageDigest(rootPath)
   if (selfPkgDigest && !result.some(pkg => path.resolve(pkg.location) === path.resolve(selfPkgDigest.location))) result.push(selfPkgDigest)
   return result
 }
 
 
 /** get package digest from repo root, reading the current manifest */
-export async function getRootPackageDigest(): Promise<IPackageDigest> {
-  const rootPath = await getProjectRoot()
+export async function getRootPackageDigest(rootPath?: string): Promise<IPackageDigest> {
+  rootPath = rootPath || await getProjectRoot()
   const pkg = readPackageJson(rootPath)
   return {
     name: pkg.name || '',

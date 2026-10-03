@@ -6,8 +6,9 @@ import { getProjectRoot, runNpmCmd } from '../utils'
 /**
  * get all package's info in a lerna project
  */
-export async function getAllPackages(): Promise<IPackageDigest[] | false> {
-  const isUsingLerna = await isManagedByLerna()
+export async function getAllPackages(rootPath?: string): Promise<IPackageDigest[] | false> {
+  rootPath = rootPath || await getProjectRoot()
+  const isUsingLerna = fs.existsSync(path.join(rootPath, 'lerna.json'))
   // not lerna powered project
   if (!isUsingLerna) return false
   const isLernaInstalled = await checkLerna()
@@ -50,7 +51,7 @@ export async function isLernaAvailable() {
 export function cleanUpLernaCliOutput(str: string): string {
   return str
     .split('\n')
-    .filter(l => /^[\s\[\]]/.test(l))
+    .filter(l => /^[\s[\]]/.test(l))
     .join('\n')
 }
 

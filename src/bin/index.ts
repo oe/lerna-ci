@@ -144,7 +144,7 @@ yargs(hideBin(process.argv))
           process.exit(1)
         }
       } else {
-        logger.success(`[${CLI_NAME}][${cmdName}] all packages.json files\' are up to update${argv.checkOnly ? '': ', nothing touched'}`)
+        logger.success(`[${CLI_NAME}][${cmdName}] all packages.json files' are up to update${argv.checkOnly ? '': ', nothing touched'}`)
       }
       console.log('')
     }
@@ -187,7 +187,7 @@ yargs(hideBin(process.argv))
         logger.warn(`[${CLI_NAME}][${cmdName}] no configuration provided for \`${cmdName}\`, this command has had no effect`)
         return
       }
-      logger.info(`[${CLI_NAME}][${cmdName}] try to sync packages\' dependencies\' versions`)
+      logger.info(`[${CLI_NAME}][${cmdName}] try to sync packages' dependencies' versions`)
       const options = Array.isArray(syncRemoteConfig)
         ? parsePackageNames(syncRemoteConfig)
         : { versionMap: syncRemoteConfig }
@@ -210,7 +210,7 @@ yargs(hideBin(process.argv))
           process.exit(1)
         }
       } else {
-        logger.success(`[${CLI_NAME}][${cmdName}] all package.json files\' dependencies are up to update, nothing touched`)
+        logger.success(`[${CLI_NAME}][${cmdName}] all package.json files' dependencies are up to update, nothing touched`)
       }
       console.log('')
     }
@@ -293,7 +293,7 @@ yargs(hideBin(process.argv))
   .demandCommand(1)
   .strict()
   .parse()
-  
+
 
 
 /**

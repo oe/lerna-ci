@@ -56,7 +56,7 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
   if (gitRoot) {
     await syncPruneGitTags()
   }
-  let changedPkgs: IPackageDigest[] = []
+  let changedPkgs: IPackageDigest[]
   try {
     changedPkgs = await getChanged()
     if (!changedPkgs.length) {

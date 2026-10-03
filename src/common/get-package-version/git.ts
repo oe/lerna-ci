@@ -55,7 +55,7 @@ export async function getPackageVersionsFromGit(type: IVersionPickStrategy = 'la
       return acc
     }, {} as Record<string, string[]>)
     return Object.keys(versionMap).reduce((acc, key) => {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
       const versions = versionMap[key]
       const stable = versions.filter(v => !semver.prerelease(v))
       acc[key] = maxVersion(...(type === 'max-stable' && stable.length ? stable : versions))!

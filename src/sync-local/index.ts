@@ -65,7 +65,7 @@ export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<
   if (!allPkgs.length) {
     throw new Error('no packages found in current project')
   }
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
   const latestVersions = await getLatestVersions(options.versionSource!, allPkgs, options.versionStrategy)
   const pkgsUpdated = allPkgs.map(item => {
     const changes = updatePackageJSON({
@@ -118,7 +118,7 @@ async function getLatestVersions(
 
   const vers: IVersionMap = {}
   Object.keys(localVers).reduce((acc, key) => {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
     acc[key] = maxVersion(npmVers[key], gitVers[key], localVers[key])!
     return acc
   }, vers)

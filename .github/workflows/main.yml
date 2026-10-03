@@ -22,15 +22,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node == '14.6.0' && '22' || matrix.node }}
-          cache: yarn
-      - run: yarn install --frozen-lockfile --ignore-scripts
-      - run: yarn build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm pack --out pack.tgz
+      - run: node test/package-smoke.cjs pack.tgz
       - uses: actions/setup-node@v4
         if: matrix.node == '14.6.0'
         with:
           node-version: ${{ matrix.node }}
       - run: node test/regression.cjs
-      - run: npm pack --dry-run --ignore-scripts
