@@ -156,10 +156,21 @@ test('a pnpm workspace outside the Git repository cannot take over its project r
   const init = spawnSync('git', ['init', repo], { encoding: 'utf8' })
   assert.strictEqual(init.status, 0, init.stderr)
   process.chdir(repo)
-  assert.strictEqual(await api.getProjectRoot(), repo)
+  assert.strictEqual(fs.realpathSync.native(await api.getProjectRoot()), fs.realpathSync.native(repo))
   await api.syncDeps({ versionMap: { react: '2.0.0' } })
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(repo, 'package.json'))).dependencies.react, '^2.0.0')
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).name, 'root')
+}))
+test('a nested pnpm workspace inside the Git repository remains the project root', () => fixture(async dir => {
+  const workspace = path.join(dir, 'nested/workspace')
+  const app = path.join(workspace, 'packages/app')
+  write(workspace, { name: 'workspace', private: true, packageManager: 'pnpm@10.34.6' })
+  write(app, { name: 'app', version: '1.0.0' })
+  fs.writeFileSync(path.join(workspace, 'pnpm-workspace.yaml'), 'packages: [packages/*]\n')
+  const init = spawnSync('git', ['init', dir], { encoding: 'utf8' })
+  assert.strictEqual(init.status, 0, init.stderr)
+  process.chdir(app)
+  assert.strictEqual(fs.realpathSync.native(await api.getProjectRoot()), fs.realpathSync.native(workspace))
 }))
 for (const [oldVersion, newVersion, expectedChange] of [
   ['^1.0.0', '1.5.0', false], ['^1.0.0', '2.0.0', true],

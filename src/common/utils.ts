@@ -112,7 +112,10 @@ export async function readRootPkgJson() {
 export async function getProjectRoot(): Promise<string> {
   const gitRoot = await getGitRoot()
   const workspaceFile = findFileRecursive('pnpm-workspace.yaml')
-  const workspaceWithinGit = !gitRoot || (workspaceFile && !path.relative(gitRoot, path.dirname(workspaceFile)).split(path.sep).includes('..'))
+  // Compare physical paths: Git may expand Windows 8.3 names or symlink aliases.
+  const relativeWorkspace = gitRoot && workspaceFile
+    ? path.relative(fs.realpathSync.native(gitRoot), fs.realpathSync.native(path.dirname(workspaceFile))) : ''
+  const workspaceWithinGit = !path.isAbsolute(relativeWorkspace) && !relativeWorkspace.split(path.sep).includes('..')
   if (workspaceFile && workspaceWithinGit && fs.existsSync(path.join(path.dirname(workspaceFile), 'package.json'))) {
     const workspaceRoot = path.dirname(workspaceFile)
     const pkg = readPackageJson(workspaceRoot)
