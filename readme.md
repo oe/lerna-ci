@@ -1,668 +1,158 @@
-<h1 align="center">lerna-ci</h1>
+# lerna-ci
 
-<div align="center">
-  <a href="https://github.com/oe/lerna-ci/actions">
-    <img src="https://github.com/oe/lerna-ci/actions/workflows/main.yml/badge.svg" alt="github actions">
-  </a>
-  <a href="#readme">
-    <img src="https://badgen.net/badge/Built%20With/TypeScript/blue" alt="code with typescript" height="20">
-  </a>
-  <a href="#readme">
-    <img src="https://badge.fury.io/js/lerna-ci.svg" alt="npm version" height="20">
-  </a>
-  <a href="https://www.npmjs.com/package/lerna-ci">
-    <img src="https://img.shields.io/npm/dm/lerna-ci.svg" alt="npm downloads" height="20">
-  </a>
-</div>
-<h4 align="center">The essential toolkit for monorepo managed by <a href="https://lerna.js.org/">lerna/npm/yarn/pnpm/turbo/etc</a></h4>
+[![CI](https://github.com/oe/lerna-ci/actions/workflows/main.yml/badge.svg)](https://github.com/oe/lerna-ci/actions)
+[![npm version](https://img.shields.io/npm/v/lerna-ci)](https://www.npmjs.com/package/lerna-ci)
 
+**Monorepo dependency synchronization and release preflight checks for pnpm, npm, and Yarn.**
 
-- [Features](#features)
-- [Install](#install)
-- [Usage](#usage)
-- [Cli commands](#cli-commands)
-  - [synclocal](#synclocal)
-  - [syncdeps](#syncdeps)
-  - [canpublish](#canpublish)
-  - [fixpack](#fixpack)
-  - [changed](#changed)
-- [API](#api)
-  - [getAllPackageDigests](#getallpackagedigests)
-  - [syncLocal](#synclocal-api)
-  - [syncDeps](#syncdeps-api)
-  - [fixpack](#fixpack-api)
-  - [getChanged](#getChanged)
-  - [getRepoNpmClient](#getreponpmclient)
-  - [getVersionFormRegistry](#getversionformregistry)
-  - [getVersionsFromRegistry](#getversionsfromregistry)
-  - [getPackageVersionsFromGit](#getpackageversionsfromgit)
-  - [isLernaAvailable](#islernaavailable)
-  - [getGitRoot](#getgitroot)
-  - [getProjectRoot](#getprojectroot)
-  - [maxVersion](#maxversion)
-  - [pickOne](#pickone)
-- [Configuration file](#configuration-file)
-- [Breaking changes](#breaking-changes)
+Align internal dependency ranges, apply chosen dependency versions across workspaces,
+and check Git, registry, and tag conflicts before a release. Use the CLI or compose
+these operations through the TypeScript/CommonJS API. Lerna is optional for synchronization.
 
-## Features
-* sync versions of packages in monorepo (with cli command)
-* sync(update) dependencies versions of all packages (with cli command)
-  * can update to latest version
-  * can update to specified version
-  * can specify packages with wildcard characters
-* format all package.json files (with cli command)
-* check if all packages are qualified to publish to npm (with cli command)
-* list all packages(requires `lerna` or `@changesets/cli`) (with cli command)
-* get all packages' meta info
-* some other useful utilities
+> This README describes the upcoming 2.1.0 release. The published 2.0.2 does not
+> include catalog support. See the [changelog](https://github.com/oe/lerna-ci/blob/main/CHANGELOG.md) for release status.
 
-**`lerna-ci` is designed for monorepo, but it can also be used in standard repo.**
+- [Quick start](#quick-start)
+- [Choose a workflow](#choose-a-workflow)
+- [Commands](#commands)
+- [pnpm catalogs](#pnpm-catalogs)
+- [CI checks](#ci-checks)
+- [Release preflight](#release-preflight)
+- [Configuration](#configuration)
+- [Library API](#library-api)
+- [Choosing a tool](#choosing-a-tool)
 
-## Install
-```sh
-# with yarn, install as a devDependency
-yarn add lerna-ci -D
+## Quick start
 
-# with npm, install as a devDependency
-npm install lerna-ci -D
-```
-you may also install it to global if you use cli commands frequently(not recommended)
-
-Notice: **lerna-ci requires node `>=14.6`**
-
-## Usage
+Requires **Node >=14.6** at runtime. Install in the workspace root:
 
 ```sh
-# sync versions of packages in monorepo, to fix versions of packages in monorepo when they are messed up
-yarn lerna-ci synclocal
-
-# sync all packages' dependencies versions
-#   following command will sync all @babel scoped npm packages and typescript to latest version, but react and react-dom will be set to 16.x
-yarn lerna-ci syncremote "@babel/*" "react@16.x" "react-dom@16.x" typescript
-
-# format all package.json files
-yarn lerna-ci fixpack
-
+pnpm add -Dw lerna-ci
+# npm: npm install --save-dev lerna-ci
+# Yarn: yarn add --dev lerna-ci
 ```
 
-## Cli commands
-`lerna-ci` also provide some cli commands, so that you do some task with a single line code.
+For a single-package pnpm project, use `pnpm add -D lerna-ci` without `-w`.
+The root package participates in synchronization along with workspace packages.
+
+Suppose two workspace packages declare React as `^18.3.1` and `~18.3.1`.
+Preview a coordinated update to a version you have chosen:
+
+```sh
+pnpm exec lerna-ci syncdeps react@19.0.0 --check-only
+```
+
+The command reports proposed changes and exits **1** because updates are needed.
+It leaves package manifests and `pnpm-workspace.yaml` untouched:
+
+```text
+^18.3.1 => ^19.0.0
+~18.3.1 => ~19.0.0
+```
+
+Apply the same update and refresh the lockfile:
+
+```sh
+pnpm exec lerna-ci syncdeps react@19.0.0
+pnpm install
+```
+
+Existing range prefixes are retained. To accept a range that already contains
+the target, add `--exact false`. To choose a different prefix, use `--range '~'`.
+Targets cover dependencies, devDependencies, optionalDependencies, and
+peerDependencies; review peer ranges because changing them can change consumer compatibility.
+
+## Choose a workflow
+
+| Task | Command | Version source |
+| --- | --- | --- |
+| Check internal dependency ranges against local package versions | `lerna-ci synclocal local --exact false --check-only` | Local manifests |
+| Align internal dependencies with local versions | `lerna-ci synclocal local` | Local manifests |
+| Apply a chosen external dependency version | `lerna-ci syncdeps react@19.0.0` | Explicit target |
+| Update selected dependencies to the highest stable registry versions | `lerna-ci syncdeps react react-dom` | npm registry |
+| Compare local, registry and Git-tag versions after a partial release | `lerna-ci synclocal all --check-only` | Maximum of those sources |
+| Check a proposed uniform patch release | `lerna-ci canpublish patch` | Git, registry and current manifests |
+
+Run these commands with `pnpm exec`, `npx`, or `yarn` as appropriate for your project.
+Git sources fetch tags from `origin`; inspect the check-only result before applying
+recovery changes, especially when stable and prerelease versions coexist.
+
+## Commands
 
 ### synclocal
-sync versions of packages in monorepo, using [syncLocal](#synclocal-api) under the hood.
 
 ```sh
-# with yarn
-yarn lerna-ci synclocal [source] [--check-only]
-
-# version source, determine where to get the packages' versions, could be: 
-#   git, npm, local, or all, default local
-# if check-only is true, it will only check if packages' versions are synced, exit 1 if not synced
-
-# or if you prefer npm
-npx lerna-ci synclocal [source] [--check-only]
-
-# check for more options and examples
-yarn lerna-ci synclocal --help
-
-# demo
-yarn lerna-ci synclocal
+pnpm exec lerna-ci synclocal local --check-only
+pnpm exec lerna-ci synclocal local --exact false
+pnpm exec lerna-ci synclocal npm --check-only
+pnpm exec lerna-ci synclocal all --check-only
 ```
 
-It's very useful when local packages versions are messed up, this may lead to some unexpected errors, it can happens in some cases:
-1. publish a beta version inside a package without using lerna(or other monorepo tools)
-2. partial success when publish packages with lerna(or other monorepo tools), you may use `yarn lerna-ci synclocal all` to fix it
+The source is `local` by default; `npm`, `git`, and `all` are also supported.
+`local` updates dependency ranges to local package versions. Other sources can
+also raise package versions to the maximum of local and selected remote versions.
+This helps inspect version drift after a partial release; it does not roll back
+published packages or complete a failed release automatically.
 
-You may need to run `yarn` or `npm install` to make your changes take effect.
+Built-in range strategies preserve `workspace:`, `file:`, npm aliases and `*`.
+For pnpm catalog references, the version is updated in the workspace catalog.
 
 ### syncdeps
-sync all packages' dependencies versions in monorepo, using [syncDeps](#syncdeps-api) under the hood.
-
-It will update following kinds of dependencies:
-* dependencies
-* devDependencies
-* optionalDependencies
-* peerDependencies
 
 ```sh
-# with yarn
-yarn lerna-ci syncdeps <packageNames...> [--check-only]
-# packageNames could be a list of package names, or a list of package name with version range, such as: 
-#     "@babel/*" "@babel/core@^7.0.0" "parcel@^2.0.0" "rollup-plugin*"
-#     package name with asterisk(*) must be quoted
-# packageNames not found or not matched will be ignored
-# if check-only is true, it will check if any package's dependencies need be synced, exit 1 if found
+# Explicit targets: no registry lookup is needed for these versions.
+pnpm exec lerna-ci syncdeps react@19.0.0 react-dom@19.0.0
 
-# or if you prefer npm, must use quotes when specify scoped wildcard package name
-npx lerna-ci syncdeps <packageNames...> [--check-only]
+# Quote wildcard targets so the shell does not expand them.
+pnpm exec lerna-ci syncdeps '@babel/*@7.26.0'
 
-# check for more options and examples
-yarn lerna-ci syncdeps --help
+# Check whether existing ranges contain a chosen target.
+pnpm exec lerna-ci syncdeps react@19.0.0 --exact false --check-only
 
-# demo
-## sync all babel related packages' versions to `^7.0.0`, all packages that start with `eslint-plugin-` to latest, and react react-dom to `18.2.0`
-yarn lerna-ci syncdeps "@babel/*@^7.0.0" "eslint-plugin-*" react@18.2.0 react-dom@18.2.0
+# Read targets from lerna-ci.syncremote configuration.
+pnpm exec lerna-ci syncdeps --check-only
 ```
 
-You may need to run `yarn` or `npm install` to make your changes take effect.
+`--check-only` compares against the supplied targets; when only names are supplied,
+it checks against registry versions. This is a target-version check, rather than
+an automatic rule requiring all currently installed versions to match one another.
+Explicit versions also make CI independent of newly published registry releases.
+The legacy `syncremote` command alias and configuration key remain supported.
 
 ### canpublish
-check if all packages are qualified to publish to npm, using [getChanged](#getChanged) under the hood if `lerna` or `@changesets/cli` is available, it will check:
-1. whether local has uncommitted changes when in git repo if `--check-git` is true
-2. whether local has conflicts when in git repo
-3. whether local is behind of remote when in git repo
-4. whether local packages' versions are synced with the latest version when `use-max-version` is true
-5. whether next versions(can be configured via `releaseType` and `period`) of local packages are occupied on npm and git
 
-it will exit 1 if any of the above conditions is satisfied
-
-
-```sh
-yarn lerna-ci canpublish [--releaseType=patch] [--period=alpha]
-# releaseType: patch, minor, major, prepatch, preminor, premajor, prerelease
-#              default patch
-# period: a string like alpha, beta, rc, etc, default alpha, only available when releaseType is pre*
-
-# check for more options and examples
-yarn lerna-ci canpublish --help
-
-# demo
-# check if all (changed) packages are qualified to publish a beta version in patch
-yarn lerna-ci canpublish --releaseType=patch --period=beta
-```
-
-### fixpack
-format all packages' package.json, using [fixpack](#fixpack-api) under the hood
-
-```sh
-# with yarn
-yarn lerna-ci fixpack
-
-# or if you prefer npm
-npx lerna-ci fixpack
-```
-above command will format all package.json files with default configuration, you can configure `fixpack`'s params via [configuration file](#configurationfile)
+See [release preflight](#release-preflight) for prerequisites and the release-type boundary.
 
 ### changed
-list all changed packages, using [getChanged](#getChanged) under the hood
 
 ```sh
-# with yarn
-yarn lerna-ci changed
-
-# or if you prefer npm
-npx lerna-ci changed
-```
-above command requires package [`lerna`](https://www.npmjs.com/package/lerna) or [`@changesets/cli`](https://www.npmjs.com/package/@changesets/cli) to be installed,  or it will exit 1.
-
-You should configure `lerna` or `@changesets/cli` following their documentations and manage your packages under their official guidelines, or this command will not work as expected.
-
-## API
-
-### getAllPackageDigests
-get all packages info in monorepo(including the root package), you can filter with custom options
-
-e.g.
-```js
-import { getAllPackageDigests } from 'lerna-ci'
-
-// get all packages
-getAllPackageDigests().then(res => console.log(res))
-// [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
-
-// find packages with custom filter function
-getAllPackageDigests((digest => digest.name.startsWith('@inner/a-'))).then(res => console.log(res))
-
-// find public packages which package name contains '@inner/'
-getAllPackageDigests({ignorePrivate: true, keyword: '@inner/'}).then(res => console.log(res))
+pnpm exec lerna-ci changed
+pnpm exec lerna-ci changed --throw
 ```
 
-Type Declarations:
-```ts
-getAllPackageDigests(filter?: IPackageFilterOptions) => Promise<IPackageDigest[]>
-
-/** package filter object */
-export interface IPackageFilterObject {
-  /** whether need private package */
-  ignorePrivate?: boolean
-  /** search package contains the keyword */
-  keyword?: string
-}
-/** package filter function */
-export type IPackageFilter = (pkg: IPackageDigest, index: number, arr: IPackageDigest[]) => boolean
-
-export type IPackageFilterOptions = IPackageFilterObject | IPackageFilter
-
-/**
- * package digest info
- */
-export interface IPackageDigest {
-  /** package name */
-  name: string
-  /** package version */
-  version: string
-  /** whether package is private */
-  private: boolean
-  /** package folder full path */
-  location: string
-}
-```
-### <a id="synclocal-api"></a> syncLocal
-sync versions of packages in monorepo(version info can be fetch from npm or git tag), if they depend each other and dependence version will be rematched.
-
-> also available as command [synclocal](#synclocal)
-
-e.g.
-```js
-import { syncLocal } from 'lerna-ci'
-// return all changed package infos
-const updatedPkgs = await syncLocal({ versionSource: 'npm' })
-// [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
-```
-
-Type Declarations:
-```ts
-syncLocal(options?: ISyncPackageOptions) => Promise<IPackageDigest[]>
-
-
-export interface ISyncPackageOptions {
-  /**
-   * version source, default to `local`
-   * how to get latest locale package versions: npm, git, local or all
-   * @default 'local'
-   */
-  versionSource?: EVerSource
-  /**
-   * npm/git version strategy
-   * @default 'latest'
-   */
-  versionStrategy?: IVersionPickStrategy
-  /**
-   * filter which package should be synced
-   */
-  packageFilter?: IPackageFilterOptions
-  /**
-   * version range strategy
-   * @default 'retain'
-   */
-  versionRangeStrategy?: IUpgradeVersionStrategy
-  /**
-   * only check, with package.json files untouched
-   * validate package whether need to update, don't change package.json file actually
-   */
-  checkOnly?: boolean
-  /**
-   * check whether packages' versions are exactly same
-   */
-  exact?: boolean
-}
-
-/**
- * upgrade version strategy
- *  retain: retain the original version range
- */
-export type IUpgradeVersionStrategy = '>' | '~' | '^' | '>=' | '' | 'retain' | IVerTransform
-
-/**
- * custom version transform
- */
-export type IVerTransform = (name: string, oldVersion: string, newVersion: string) => string
-
-```
-
-Tips: you may need to reinstall your workspace dependence if anything changed
-
-
-### <a id="syncdeps-api"></a> syncDeps
-sync packages dependencies(e.g. babel, react, typescript, etc) versions at once
-
-> also available as command [syncdeps](#syncdeps)
-
-```js
-import { syncDeps } from 'lerna-ci'
-
-// update all packages that depend `react` and `react-dom` to their latest version(will fetch from npm)
-//  return all changed package infos(aka all packages that depend on these packageNames and be updated)
-const updatedPkgs = await syncDeps({ packageNames: ['react', 'react-dom'] })
-// [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
-
-// as above, but will also update dependence typescript to a fixed version 3.1.0 and parcel to ^2.0.0
-const updatedPkgs = await syncDeps({ packageNames: ['react', 'react-dom'], versionMap: { typescript: '=3.1.0', parcel: '2.0.0' } })
-// [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
-```
-
-Type Declarations:
-```ts
-syncDeps(syncOptions: ISyncDepOptions)=> Promise<IPackageDigest[]>
-
-export interface ISyncDepOptions {
-  /** 
-   * package names that should update
-   *  will fetch its version from npm by default
-   *  package name can use asterisk, e.g. @babel/*
-   * 
-   * @example
-   *  ['duplex-message', '@typescript-eslint/parser', '@babel/*', '*plugin*', 'react*']
-   */
-  packageNames?: string[]
-  /**
-   * version map<pkgName, version>
-   *  prefer use this as version map if provided
-   *  pkgName can be a pattern like @babel/*
-   *  if packageNames also provided, will fetch missing versions
-   * @example
-   * {'@babel/*': '7.0.0', 'parcel': '^2.0.0', '@types/react': '~18.0.0'}
-   */
-  versionMap?: IVersionMap
-  /**
-   * npm version strategy
-   *  default to 'max-stable'
-   */
-  versionPickStrategy?: IVersionPickStrategy
-  /**
-   * version range strategy, use retain by default
-   */
-  versionRangeStrategy?: IVersionRangeStrategy
-  /** only check, with package.json files untouched */
-  checkOnly?: boolean
-  /**
-   * update version to the exact given version
-   *  set to false only update when existing version range is not satisfied
-   * @default true
-   */
-  exact?: boolean
-}
-```
-
-Tips: you may need to reinstall your workspaces dependence if anything changed
-
-### <a id="fixpack-api"></a> fixpack
-Make all your package.json files are written in same criterion: sorting fields, validating required fields.
-This feature is powered by [fixpack](https://github.com/HenrikJoreteg/fixpack).
-
-> also available as command [fixpack](#fixpack)
-
-e.g.
-```js
-import { fixpack } from 'lerna-ci'
-
-const updatedPkgs = await fixpack()
-// [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
-
-```
-
-Type Declarations:
-```ts
-fixpack (options?: IFixPackOptions) => Promise<IPackageDigest[]>
-
-export interface IFixPackOptions {
-  /**
-   * which package's should be fixed
-   */
-  packageFilter?: IPackageFilterOptions
-  /**
-   * package fix configuration
-   *  check source <src/fixpack-all/config.ts> for default configuration
-   *  see https://github.com/HenrikJoreteg/fixpack#configuration for details
-   */
-  config?: any
-}
-```
-
-### getChanged
-List all changed packages since last release, it requires package `lerna` or `@changesets/cli` to be installed.
-
-> also available as command [changed](#changed)
-
-e.g.
-```js
-import { getChanged } from 'lerna-ci'
-
-const changedPkgs = await getChanged()
-// [{name: 'my-package', version: '1.0.1', private: false, location: '/Users/xx/work/monorepo/my-package'}]
-
-```
-
-Type Declarations:
-```ts
-getChanged() => Promise<IPackageDigest[]>
-
-```
-
-### getRepoNpmClient
-get current monorepo preferred npm client
-
-e.g.
-```js
-import { getRepoNpmClient } from 'lerna-ci'
-
-// will return npm for default if not specified
-//   get `yarn-next` when yarn version >= 2.0 found 
-getRepoNpmClient().then(client => console.log(client))
-// yarn
-```
-### getVersionFormRegistry
-get version from npm registry, you can get the latest version or the max version
-
-e.g.
-```js
-import { getVersionFormRegistry } from 'lerna-ci'
-
-getVersionFormRegistry(options: IGetPkgVersionFromRegistryOptions) => Promise<string | undefined>
-
-export interface IGetPkgVersionFromRegistryOptions {
-  /** package name */
-  pkgName: string
-  /** strategy: latest or max */
-  versionStrategy?: IVersionPickStrategy
-  /**
-   * specified version, to check for existence
-   *  return itself if found, otherwise return empty string
-   */
-  version?: string
-  /**
-   * preferred npm client, auto detect if omitted
-   */
-  npmClient?: 'yarn' | 'yarn-next' | 'npm' | 'pnpm'
-}
-```
-tips: if you want to fetch version from a npm mirror or custom registry, you should specify the mirror in the `.yarnrc` or `.npmrc` file
-
-### getVersionsFromRegistry
-batch version of `getVersionFormRegistry`, but return an object(key is package name, value is version)
-
-
-Type Declarations:
-```ts
-getVersionsFromRegistry(options: IGetPkgVersionsFromRegistryOptions) => Promise<Record<string, string>>
-
-export interface IGetPkgVersionsFromRegistryOptions {
-  /**
-   * package names
-   */
-  pkgNames: string[]
-  /**
-   * version pick strategy
-   *  max: max package version
-   *  max-stable: max stable package version
-   *  latest: latest release package version
-   * @default max
-   */
-  versionStrategy?: 'max' | 'latest' | 'max-stable'
-  /**
-   * preferred npm client, detect automatically if not provided
-   */
-  npmClient?: 'yarn' | 'yarn-next' | 'npm' | 'pnpm'
-}
-```
-
-
-### getPackageVersionsFromGit
-get monorepo package version map from git tag list(only tags in `packageName@versionNumber` like `react@1.0.0` will be recognized).  
-This API runs `git fetch origin --prune --tags` to sync remote tags and prune stale remote-tracking branches. It does not delete local-only tags.
-
-e.g.
-```js
-import { getPackageVersionsFromGit } from 'lerna-ci'
-
-// will return npm for default if not specified
-getPackageVersionsFromGit().then(ver => console.log(ver))
-// {'duplex-message': '1.1.2', 'simple-electron-ipc': '1.1.2'}
-```
-
-Type Declarations:
-```ts
-getPackageVersionsFromGit(type: 'latest' | 'max' = 'latest') => Promise<Record<string, string>>
-```
-
-### isLernaAvailable
-check whether lerna is installed in current repo
-
-e.g.
-```js
-import { isLernaAvailable } from 'lerna-ci'
-
-isLernaAvailable().then(isInstalled => console.log(isInstalled))
-// true
-```
-
-### getGitRoot
-get git root path of current repo
-
-e.g.
-```js
-import { getGitRoot } from 'lerna-ci'
-
-// return false if not in a git repo
-const maxVer = await getGitRoot()
-// /User/xx/work/monorepo
-```
-
-### getProjectRoot
-get current project's root path (which contains a `package.json` file)
-
-e.g.
-```js
-import { getProjectRoot } from 'lerna-ci'
-
-// throw error if not in a valid frontend project
-const maxVer = await getProjectRoot()
-// /User/xx/work/monorepo
-```
-
-### maxVersion
-get max version(compare in semver) from a version list
-
-e.g.
-```js
-import { maxVersion } from 'lerna-ci'
-
-const maxVer = maxVersion('0.1', '0.0.1', '1.0.0-alpha.1', '1.0.0')
-// 1.0.0
-```
-
-### pickOne
-pick a value from a list with a custom compare method
-
-e.g.
-```js
-import { pickOne } from 'lerna-ci'
-
-const picked = pickOne([{name: 'Lisa', age: 10}, {name: 'Janie', age: 12}, {name: 'Marry', age: 9}], (a, b) => a.age - b.age)
-// {name: 'Janie', age: 12}
-```
-
-Type Declarations:
-```ts
-pickOne<V>(list: V[], compare: ICompare<V>) => V | undefined
-
-// return `a` if result >= 0, or return `b`
-type ICompare<V> = ((a: V, b: V) => -1 | 0 | 1
-```
-
-
-## Configuration file
-You may also add config for these commands via following ways(powered by [cosmiconfig](https://github.com/davidtheclark/cosmiconfig)) so that you don't need to specify the arguments:
-* add `lerna-ci` field to `package.json` in the root of the project
-* add `.lerna-circ` file in the root of the project with json or yaml format
-* add `.lerna-circ.json`, `.lerna-circ.yaml`, `.lerna-circ.yml` or `.lerna-circ.cjs` file in the root of the project
-* add `lerna-ci.config.js` or `lerna-ci.config.cjs` file in the root of the project
-
-all these configurations should return an object with the following properties:
-* `synclocal`: use `versionSource` and `versionRangeStrategy` from [syncLocal](#synclocal-api); legacy `source` and `versionRange` are also accepted
-* `syncremote`: an array of dependency names or an object mapping names/patterns to versions
-* `fixpack`: same as the params of [fixpack](#fixpack-api)
-
-
-## Breaking changes
-If you are updating from `0.0.x`, you should be careful about following changes:
-
-1. default configuration for `fixpack` has been changed, you may restore the former behavior by setting `fixpack.config` to [old configuration](https://github.com/oe/lerna-ci/blob/legacy/src/fixpack/config.ts) in [configuration file](#configurationfile)
-2. if you are using APIs, most useful APIs are renamed for better understanding, but no feature is removed, you may read docs above to upgrade
-
-
-## Development and validation
-
-Development uses pnpm 10, TypeScript 6, Vite 8, ESLint 10 with flat configuration,
-and tsx. Use Node 22.13+ in the Node 22 series or Node 24+ for development; the
-published library and CLI still support Node >=14.6. `.node-version` selects Node 24.
+Lists packages selected by Lerna's changed command or Changesets' status output.
+Requires Git and an installed/configured Lerna or `@changesets/cli` project.
+`--throw` exits 1 when changed packages are found. Plain workspaces do not provide
+change detection for this command.
+
+### fixpack
 
 ```sh
-corepack enable
-pnpm install --frozen-lockfile
-pnpm build          # CommonJS modules, declarations, executable CLI
-pnpm dev:build      # Vite watch mode
-pnpm typecheck     # source and tooling configuration types
-pnpm test          # lint, tooling types, build, offline regressions
-pnpm test:package  # pack, isolated consumer, imports, CLI, public types
-pnpm test:catalog  # real pnpm catalogs, frozen install, and publishing conversion
+pnpm exec lerna-ci fixpack
 ```
 
-Vite preserves the existing `dist/index.js`, `dist/index.d.ts`, CLI entry point,
-and module paths. Runtime dependencies stay external. The version-source enum is available at runtime
-and its declarations work with `isolatedModules` (including Vite consumers). `tsc` emits declarations
-and checks source types; Vite handles JavaScript. `prepack` validates lint and
-tooling types before building, and the `files` allowlist publishes only `dist`
-plus npm's standard manifest, README, and license files. pnpm pins its own version
-and stores reproducible dependency resolution in `pnpm-lock.yaml`.
+Formats workspace manifests using [fixpack](https://github.com/HenrikJoreteg/fixpack).
+The API accepts package filters, custom formatting options and dry-run configuration.
 
-The regression suite uses temporary workspaces and mocked registry processes.
-Package tests install the tarball into a separate consumer and verify CommonJS,
-native ESM imports, the installed CLI, TypeScript usage, and the regression suite.
-CI covers Node 14.6 (the minimum runtime), 22, and 24, plus Windows on Node 22;
-modern build tools run on Node 22 before switching to the legacy runtime.
+Each command supports `--help`. Check-only commands exit 0 when no updates are
+needed and 1 when updates are proposed or an error occurs. The API returns structured
+results instead of setting the process exit code.
 
-Workspace scans resolve the project root once per operation and continue to read
-fresh manifests. A local 51-package benchmark (20 measured samples after warmup)
-reduced median scan time from 28.8 ms to 9.7 ms and Git subprocesses from seven to
-one; timings depend on the host and repository. Registry lookups deduplicate
-package names and keep up to six requests active without waiting for an entire
-batch, while preserving result order. Explicit wildcard version overrides also
-avoid redundant registry requests.
+## pnpm catalogs
 
-Runtime `cosmiconfig` and `find-packages` are updated to compatible releases;
-TypeScript-only dependencies are development dependencies, and Node's filesystem
-APIs replace rimraf. Newer ESM-only or higher-Node versions of detect-indent and
-yargs are intentionally deferred to preserve CommonJS and Node 14.6 support.
-
-The `--exact false` option preserves an existing dependency range when it contains
-the target version or target range. Explicit range strategies such as `--range '~'`
-also apply to existing caret and tilde dependencies. Protocols such as `workspace:*`,
-`file:`, and npm aliases are preserved.
-
-### pnpm catalogs
-
-Catalog support is automatic when the project uses pnpm and defines or references
-catalogs. The package manager is detected from `packageManager`, with
-`pnpm-workspace.yaml` as a fallback when that field is absent. npm and Yarn do not
-read or update pnpm catalogs, and ordinary dependencies keep their existing behavior.
-
-`syncDeps` updates matching entries in `catalog`, `catalogs.default`, and named
-`catalogs` in `pnpm-workspace.yaml`. It preserves `catalog:`, `catalog:default`, and
-`catalog:name` in all four dependency fields. Wildcard package targets include
-catalog-only entries, including entries used by `overrides`; each package version
-is fetched once. A target applies to matching entries across all catalogs, so use
-care when maintaining separate major versions in named catalogs.
+Catalog synchronization is automatic for **pnpm projects using catalogs**.
+npm and Yarn retain their ordinary synchronization behavior. With no explicit
+`packageManager`, `pnpm-workspace.yaml` identifies a pnpm workspace.
 
 ```yaml
 # pnpm-workspace.yaml
@@ -675,46 +165,171 @@ catalogs:
     react: ~18.3.1
 ```
 
-With `"react": "catalog:"` or `"react": "catalog:next"` in package manifests,
-`lerna-ci syncdeps react@19.0.0` changes those YAML ranges to `^19.0.0` and
-`~19.0.0` while leaving the manifest references untouched. `--exact false` checks
-the catalog's range; `--range` and custom API transforms apply to its actual value.
-`syncLocal` also updates catalog semver ranges for selected local package names.
-Newer pnpm catalog values using `workspace:`, `file:`, or `link:` are preserved
-by the built-in range strategies.
+A package can use `"react": "catalog:"`, `"catalog:default"`, or `"catalog:next"`.
+Running `lerna-ci syncdeps react@19.0.0` changes the two YAML ranges to `^19.0.0`
+and `~19.0.0` and preserves those references in all package manifests.
 
-`--check-only` reports catalog changes and exits 1 when updates are needed, without
-writing either file. API results include a `pnpm-workspace.yaml` item with fields
-such as `catalog` or `catalogs.next`. Updates preserve comments, quoting, line
-endings, and unrelated settings such as `catalogMode` and catalog cleanup options.
-Missing entries, duplicate default definitions, recursive references and invalid
-YAML fail before writing. Automatic edits require direct, single-line YAML scalar
-values; anchors, aliases, merges and block scalars that need updating raise an
-explicit error to avoid changing shared configuration. Catalogs are shared across
-the workspace, so local package filters cannot restrict who consumes an updated entry.
+- Default, `catalogs.default`, and named catalogs are supported.
+- Wildcard targets include catalog-only entries, including entries used by `overrides`.
+- Range strategies and `--exact false` operate on the catalog's actual range.
+- Check-only leaves both manifests and workspace YAML untouched.
+- Version edits preserve comments, quoting, line endings and unrelated pnpm settings.
+- Built-in strategies preserve newer pnpm catalog values using `workspace:`, `file:`, or `link:`.
 
-Run `pnpm install` after synchronization to refresh `pnpm-lock.yaml`, as with
-ordinary dependency updates. Integration tests exercise real pnpm 10 and the
-current latest release, including frozen installation and `pnpm pack` conversion.
+A target applies to matching entries across all catalogs. Catalogs are shared, so
+local package filters cannot restrict which consumers receive an updated catalog
+entry. Missing entries, recursive references, duplicate default definitions and
+invalid YAML fail before writes. Updating YAML anchors, aliases, merges or block
+scalars requires manual editing. Run `pnpm install` afterward to update the lockfile.
 
-`canpublish` blocks unresolved Git conflicts even with `--check-git false`, compares
-upstream revision counts independently of Git's display language, and stops if the
-registry request fails with an authentication, network, or server error. A missing
-package (`E404`) is treated as unpublished. General registry lookups retain their
-warning-and-undefined behavior; API callers can opt into errors with `throwOnError: true`.
+## CI checks
 
-CLI configuration uses the documented `lerna-ci` name. Existing `lerna-cli` files
-and package fields remain supported as a fallback. Invalid configuration now raises
-an error. `synclocal` CLI flags override configured source and range values.
+Choose the versions your repository accepts, rather than querying latest versions
+on every pull request. For example, add these scripts to the root `package.json`:
 
-Workspace discovery reads fresh manifests on each call and includes the root
-package once. Yarn Classic object-form workspaces (`{ "packages": [...] }`) are
-supported. `changed` requires Lerna or Changesets; npm/pnpm/Yarn workspaces alone
-do not provide change detection. Remote tag synchronization expects an `origin`
-remote, and publish checks require a configured upstream branch.
+```json
+{
+  "scripts": {
+    "versions:check": "lerna-ci synclocal local --exact false --check-only",
+    "deps:check": "lerna-ci syncdeps react@19.0.0 react-dom@19.0.0 --exact false --check-only"
+  }
+}
+```
 
-The native workspace scanner limits brace/parenthesis pattern nesting to 32 to
-mitigate [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
-The transitive `braces` package still has no patched release, so dependency audits
-continue to report this advisory. Replace or upgrade that dependency when a fix
-becomes available; the guard applies to the native scanner's input, not other tools.
+Replace the React targets with your repository's policy. Commit `pnpm-lock.yaml`
+and pin your existing pnpm version in the root `packageManager` field before using
+this GitHub Actions example:
+
+```yaml
+name: Workspace versions
+on: [pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run versions:check
+      - run: pnpm run deps:check
+```
+
+These checks leave manifests and catalogs unchanged. A version mismatch fails the
+job; a matching range passes. Dependencies declared through `workspace:*` or
+`workspace:^` are preserved because the package manager handles their version expansion.
+
+## Release preflight
+
+Before a release that applies the same bump type to selected packages:
+
+```sh
+pnpm exec lerna-ci canpublish patch
+# For the next patch prerelease with a beta identifier:
+pnpm exec lerna-ci canpublish prepatch --period beta
+```
+
+Run from a Git branch with an `origin` remote and a configured upstream. The
+command fetches tags, checks Git conflicts and uncommitted changes, requires the
+branch to match its upstream, and checks whether predicted versions already exist
+in registry entries or `packageName@version` Git tags. Registry authentication,
+network and server failures stop the check; an `E404` means the package is unpublished.
+
+Lerna/Changesets selects changed packages. In a Git workspace without either,
+`canpublish` checks all discovered packages. `--check-git false` skips the
+uncommitted-files check; conflict and upstream checks still run. `--use-max-version`
+also checks local versions against Git/npm versions.
+
+**The command applies one release type to every selected package.** Changesets
+provides the package selection, but its per-package release types and planned
+`newVersion` values are not consumed. Use this check before the version bump for
+uniform releases; mixed Changesets release plans need their own planned-version
+validation. Passing this check does not validate publish credentials, packed
+artifacts, changelogs, or every requirement of a release pipeline.
+
+## Configuration
+
+Use the root `package.json` field `lerna-ci`:
+
+```json
+{
+  "lerna-ci": {
+    "synclocal": {
+      "versionSource": "local",
+      "versionRangeStrategy": "retain"
+    },
+    "syncremote": {
+      "react": "19.0.0",
+      "react-dom": "19.0.0"
+    },
+    "fixpack": {
+      "config": { "dryRun": true }
+    }
+  }
+}
+```
+
+`syncdeps` can run with configured targets, and explicit command targets take
+precedence. `synclocal` source/range flags also override configuration. Config files
+such as `.lerna-circ.json`, `.lerna-circ.yaml`, and `lerna-ci.config.cjs` are supported.
+The legacy `lerna-cli` configuration name remains a fallback; invalid configuration
+raises an error.
+
+## Library API
+
+Use the API to embed checks in an existing Node or TypeScript workflow:
+
+```ts
+import { EVerSource, syncLocal, syncDeps } from 'lerna-ci'
+
+async function checkVersions() {
+  const localChanges = await syncLocal({
+    versionSource: EVerSource.LOCAL,
+    exact: false,
+    checkOnly: true,
+  })
+  const dependencyChanges = await syncDeps({
+    versionMap: { react: '19.0.0', 'react-dom': '19.0.0' },
+    exact: false,
+    checkOnly: true,
+  })
+  if (localChanges || dependencyChanges) {
+    console.error({ localChanges, dependencyChanges })
+    process.exitCode = 1
+  }
+}
+
+checkVersions().catch(error => { console.error(error); process.exitCode = 1 })
+```
+
+Synchronization returns `IChangedPackage[] | false`. A catalog change appears as a
+`pnpm-workspace.yaml` item with fields such as `catalog` or `catalogs.next`.
+CommonJS `require('lerna-ci')` remains supported; TypeScript declarations are included.
+
+[Full API reference](https://github.com/oe/lerna-ci/blob/main/docs/api.md) ·
+[Development, compatibility and validation](https://github.com/oe/lerna-ci/blob/main/docs/development.md)
+
+## Choosing a tool
+
+| Need | Consider |
+| --- | --- |
+| Dependency synchronization, partial-release inspection and scriptable release checks | lerna-ci |
+| Dependency consistency rules, exceptions, catalog migration and policy enforcement | [Syncpack](https://github.com/JamieMason/syncpack) |
+| Package manifest and internal dependency linting | [Manypkg](https://github.com/Thinkmill/manypkg) |
+| Dependency upgrade discovery and interactive selection | [npm-check-updates](https://github.com/raineorshine/npm-check-updates) |
+| Release plans, version bumps, changelogs and publishing | [Changesets](https://github.com/changesets/changesets) or [Lerna](https://github.com/lerna/lerna) |
+
+Use lerna-ci alongside the release tool your repository already uses. Choose the
+commands needed by your workflow; no migration to a new build system is required.
+
+## Feedback
+
+For a bug or workflow question, [open an issue](https://github.com/oe/lerna-ci/issues)
+with the command, expected result, package manager and a small workspace example.
+Useful feedback includes whether the check belongs in every pull request, a release
+job, or recovery after a failed release.

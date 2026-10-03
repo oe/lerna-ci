@@ -81,7 +81,7 @@ yargs(hideBin(process.argv))
   // command synclocal
   .command(
     'synclocal [source]',
-    'sync local packages versions to remote(git tags, npm versions)',
+    'align workspace versions and local dependencies with local, Git or npm versions',
     (yargs) => yargs
       .usage('$0 synclocal [source] [--range <versionRange>]')
       .example([
@@ -111,7 +111,7 @@ yargs(hideBin(process.argv))
         default: true,
       })
       .version(false)
-      .help(false),
+      .help(),
     async (argv) => {
       const cmdName = 'synclocal'
       const repoConfig = await getCliConfig()
@@ -151,10 +151,10 @@ yargs(hideBin(process.argv))
   )
   // command syncdeps
   .command(
-    ['syncdeps <packages...>','syncremote'],
+    ['syncdeps [packages...]','syncremote'],
     'sync packages\' dependencies versions',
     (yargs) => yargs
-      .usage('$0 syncdeps <packages...> [--range <versionRange>]')
+      .usage('$0 syncdeps [packages...] [--range <versionRange>]')
       .example([
         ['$0 syncdeps react react-dom', 'update to latest stable version'],
         ['$0 syncdeps react react-dom -r "~"', 'update to latest stable version with custom version range'],
@@ -183,9 +183,8 @@ yargs(hideBin(process.argv))
       const cmdName = 'syncdeps'
       const repoConfig = await getCliConfig()
       const syncRemoteConfig = argv.packages?.length ? argv.packages : repoConfig.syncremote
-      if (!syncRemoteConfig) {
-        logger.warn(`[${CLI_NAME}][${cmdName}] no configuration provided for \`${cmdName}\`, this command has had no effect`)
-        return
+      if (!syncRemoteConfig || !Object.keys(syncRemoteConfig).length) {
+        throw new Error('Provide package targets or configure lerna-ci.syncremote before running syncdeps')
       }
       logger.info(`[${CLI_NAME}][${cmdName}] try to sync packages' dependencies' versions`)
       const options = Array.isArray(syncRemoteConfig)
@@ -224,12 +223,12 @@ yargs(hideBin(process.argv))
       .example([
         ['$0 canpublish', 'check whether all changed packages are eligible to publish next patch versions'],
         ['$0 canpublish --releaseType major', 'check whether all changed packages are eligible to publish next major versions'],
-        ['$0 canpublish --period beta', 'check whether all changed packages are eligible to publish next patch\'s beta versions'],
-        ['$0 canpublish --releaseType minor --period beta', 'check whether all changed packages are eligible to publish next minor\'s beta versions'],
+        ['$0 canpublish prepatch --period beta', 'check the next patch prerelease versions with the beta identifier'],
+        ['$0 canpublish preminor --period beta', 'check the next minor prerelease versions with the beta identifier'],
         ['$0 canpublish --releaseType minor --use-max-version', 'check whether all changed packages are eligible to publish next minor version and whether all packages\' versions are synced to the latest'],
       ])
       .positional('releaseType', {
-        description: 'next version type, like major, minor, patch or alpha(for test), default to patch',
+        description: 'next version type: major, minor, patch or a prerelease type; default patch',
         default: 'patch',
         choices: RELEASE_TYPES,
       })

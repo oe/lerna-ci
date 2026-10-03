@@ -1,9 +1,13 @@
 {
   "name": "lerna-ci",
-  "version": "2.0.2",
-  "description": "The essential toolkit for monorepo managed by lerna",
+  "version": "2.1.0",
+  "description": "Monorepo dependency synchronization and release preflight checks for pnpm, npm, and Yarn",
   "author": "Saiya",
   "repository": "https://github.com/oe/lerna-ci.git",
+  "homepage": "https://github.com/oe/lerna-ci#readme",
+  "bugs": {
+    "url": "https://github.com/oe/lerna-ci/issues"
+  },
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "bin": "./dist/bin/index.js",
@@ -49,18 +53,28 @@
     "node": ">=14.6"
   },
   "keywords": [
-    "ci/cd",
+    "dependencies",
+    "dependency-sync",
+    "dependency-updates",
+    "workspaces",
+    "package-json",
+    "semver",
+    "catalogs",
+    "pnpm-catalog",
+    "release",
+    "preflight",
+    "changesets",
+    "ci",
     "lerna",
     "yarn",
     "pnpm",
     "npm",
-    "lerna-ci",
-    "monorepo",
-    "toolkit"
+    "monorepo"
   ],
   "license": "MIT",
   "packageManager": "pnpm@10.34.6",
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ]
 }

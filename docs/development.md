@@ -1,0 +1,83 @@
+# Development and compatibility
+
+Development uses pnpm 10, TypeScript 6, Vite 8, ESLint 10 with flat configuration,
+and tsx. Use Node 22.13+ in the Node 22 series or Node 24+ for development; the
+published library and CLI still support Node >=14.6. `.node-version` selects Node 24.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm build          # CommonJS modules, declarations, executable CLI
+pnpm dev:build      # Vite watch mode
+pnpm typecheck     # source and tooling configuration types
+pnpm test          # lint, tooling types, build, offline regressions
+pnpm test:package  # pack, isolated consumer, imports, CLI, public types
+pnpm test:catalog  # real pnpm catalogs, frozen install, and publishing conversion
+```
+
+Install or activate the version pinned in `packageManager` before running these
+commands. Node 24 distributions may need Corepack installed separately; using an
+existing pnpm installation is also supported.
+
+Vite preserves the existing `dist/index.js`, `dist/index.d.ts`, CLI entry point,
+and module paths. Runtime dependencies stay external. The version-source enum is available at runtime
+and its declarations work with `isolatedModules` (including Vite consumers). `tsc` emits declarations
+and checks source types; Vite handles JavaScript. `prepack` validates lint and
+tooling types before building, and the `files` allowlist publishes only `dist`
+plus npm's standard manifest, README, license, and CHANGELOG files. pnpm pins its own version
+and stores reproducible dependency resolution in `pnpm-lock.yaml`.
+
+The regression suite uses temporary workspaces and mocked registry processes.
+Package tests install the tarball into a separate consumer and verify CommonJS,
+native ESM imports, the installed CLI, TypeScript usage, and the regression suite.
+CI covers Node 14.6 (the minimum runtime), 22, and 24, plus Windows on Node 22;
+modern build tools run on Node 22 before switching to the legacy runtime.
+The catalog integration suite also exercises the current latest pnpm release.
+
+See the [release procedure](releasing.md) for the prepared 2.1.0 release.
+
+Workspace scans resolve the project root once per operation and continue to read
+fresh manifests. A local 51-package benchmark (20 measured samples after warmup)
+reduced median scan time from 28.8 ms to 9.7 ms and Git subprocesses from seven to
+one; timings depend on the host and repository. Registry lookups deduplicate
+package names and keep up to six requests active without waiting for an entire
+batch, while preserving result order. Explicit wildcard version overrides also
+avoid redundant registry requests.
+
+Runtime `cosmiconfig` and `find-packages` are updated to compatible releases;
+TypeScript-only dependencies are development dependencies, and Node's filesystem
+APIs replace rimraf. Newer ESM-only or higher-Node versions of detect-indent and
+yargs are intentionally deferred to preserve CommonJS and Node 14.6 support.
+
+The `--exact false` option preserves an existing dependency range when it contains
+the target version or target range. Explicit range strategies such as `--range '~'`
+also apply to existing caret and tilde dependencies. Protocols such as `workspace:*`,
+`file:`, and npm aliases are preserved.
+
+`canpublish` blocks unresolved Git conflicts even with `--check-git false`, compares
+upstream revision counts independently of Git's display language, and stops if the
+registry request fails with an authentication, network, or server error. A missing
+package (`E404`) is treated as unpublished. General registry lookups retain their
+warning-and-undefined behavior; API callers can opt into errors with `throwOnError: true`.
+
+CLI configuration uses the documented `lerna-ci` name. Existing `lerna-cli` files
+and package fields remain supported as a fallback. Invalid configuration now raises
+an error. `synclocal` CLI flags override configured source and range values.
+
+Workspace discovery reads fresh manifests on each call and includes the root
+package once. Yarn Classic object-form workspaces (`{ "packages": [...] }`) are
+supported. `changed` requires Lerna or Changesets; npm/pnpm/Yarn workspaces alone
+do not provide change detection. Remote tag synchronization expects an `origin`
+remote, and publish checks require a configured upstream branch.
+
+The native workspace scanner limits brace/parenthesis pattern nesting to 32 to
+mitigate [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
+The transitive `braces` package still has no patched release, so dependency audits
+continue to report this advisory. Replace or upgrade that dependency when a fix
+becomes available; the guard applies to the native scanner's input, not other tools.
+
+## Migration from 0.0.x
+
+The default fixpack configuration and several API names changed before 2.0.
+Restore the [legacy fixpack configuration](https://github.com/oe/lerna-ci/blob/legacy/src/fixpack/config.ts)
+through the `fixpack.config` option if needed, and use the [API reference](api.md)
+to update old calls. This maintenance release preserves the 2.0.2 public exports.

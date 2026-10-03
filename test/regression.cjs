@@ -163,6 +163,53 @@ test('CLI default retain and explicit range override both work', () => fixture(a
   assert.strictEqual(result.status, 0, result.stderr + result.stdout)
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).dependencies.react, '~3.0.0')
 }))
+
+test('CLI help works for synclocal without changing manifests', () => fixture(async dir => {
+  const before = fs.readFileSync(path.join(dir, 'package.json'), 'utf8')
+  const result = cli(dir, 'synclocal', '--help')
+  assert.strictEqual(result.status, 0, result.stderr + result.stdout)
+  assert.match(result.stdout, /--check-only/)
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), before)
+}))
+
+test('CLI syncdeps reads configured targets and lets explicit targets override them', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0' },
+    'lerna-ci': { syncremote: { react: '2.0.0' } } })
+  const before = fs.readFileSync(path.join(dir, 'package.json'), 'utf8')
+  let result = cli(dir, 'syncdeps', '--check-only')
+  assert.strictEqual(result.status, 1, result.stderr + result.stdout)
+  assert.match(result.stdout + result.stderr, /\^1\.0\.0 => \^2\.0\.0/)
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), before)
+  result = cli(dir, 'syncdeps', 'react@1.0.0', '--check-only')
+  assert.strictEqual(result.status, 0, result.stderr + result.stdout)
+  result = cli(dir, 'syncdeps')
+  assert.strictEqual(result.status, 0, result.stderr + result.stdout)
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).dependencies.react, '^2.0.0')
+}))
+
+test('CLI syncdeps rejects missing targets instead of passing an empty check', () => fixture(async dir => {
+  const before = fs.readFileSync(path.join(dir, 'package.json'), 'utf8')
+  const result = cli(dir, 'syncdeps', '--check-only')
+  assert.strictEqual(result.status, 1, result.stderr + result.stdout)
+  assert.match(result.stderr, /Provide package targets or configure/)
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), before)
+}))
+
+for (const targets of [[], {}]) {
+  test(`CLI rejects empty configured targets ${JSON.stringify(targets)}`, () => fixture(async dir => {
+    write(dir, { name: 'root', 'lerna-ci': { syncremote: targets } })
+    const result = cli(dir, 'syncdeps', '--check-only')
+    assert.strictEqual(result.status, 1, result.stderr + result.stdout)
+    assert.match(result.stderr, /Provide package targets or configure/)
+  }))
+}
+
+test('legacy syncremote alias accepts configured target arrays', () => fixture(async dir => {
+  write(dir, { name: 'root', dependencies: { react: '^1.0.0' }, 'lerna-ci': { syncremote: ['react@2.0.0'] } })
+  const result = cli(dir, 'syncremote')
+  assert.strictEqual(result.status, 0, result.stderr + result.stdout)
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).dependencies.react, '^2.0.0')
+}))
 for (const format of ['package.json', '.lerna-circ.json', 'lerna-ci.config.cjs']) {
   test(`documented configuration is loaded from ${format}`, () => fixture(async dir => {
     const config = { synclocal: { versionSource: 'local', versionRangeStrategy: '~' } }
