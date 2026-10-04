@@ -3,19 +3,18 @@ import {
   getVersionTransformer,
   getVersionsFromRegistry,
   IVersionPickStrategy,
-  updatePackageJSON,
   IVersionRangeStrategy,
   isAsteriskPkgName,
   isPkgNameMatchingPattern,
-  IPackageDigest,
   IVersionMap,
-  getAllDependencies,
   IChangedPackage,
   getProjectRoot,
   getRepoNpmClient,
   logger,
 } from '../common'
 import { getCatalogPackageNames, planCatalogUpdates, readPnpmCatalogs, validateCatalogReferences } from '../common/pnpm-catalogs'
+import { capturePackageInputs, createSyncPlan, ISyncPlan, ISyncSkipped, validateSyncPlan } from '../common/sync-plan'
+import { planPackageJSON } from '../common/update-package'
 
 export interface ISyncDepOptions {
   /**
@@ -53,6 +52,10 @@ export interface ISyncDepOptions {
    * @default true
    */
   exact?: boolean
+  /** Reject registry failures and ranges requiring manual changes. Legacy API default false. */
+  strict?: boolean
+  /** Require every requested target to match a dependency/catalog entry. Default false. */
+  requireMatch?: boolean
 }
 
 const DEFAULT_OPTIONS: ISyncDepOptions = {
@@ -67,56 +70,76 @@ const DEFAULT_OPTIONS: ISyncDepOptions = {
  * @param syncOptions options
  */
 export async function syncDeps(syncOptions: ISyncDepOptions): Promise<IChangedPackage[] | false> {
+  const options = { ...syncOptions, strict: syncOptions.strict ?? false }
+  const plan = await planSyncDeps(options)
+  validateSyncPlan(plan, options.strict, options.requireMatch)
+  return options.checkOnly ? (plan.changes.length ? plan.changes : false) : plan.apply()
+}
+
+/** Plan all edits without writing. Unlike the legacy API, planning is strict by default. */
+export async function planSyncDeps(syncOptions: ISyncDepOptions): Promise<ISyncPlan> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
+  const strict = options.strict ?? true
   const rootPath = await getProjectRoot()
   const isPnpm = await getRepoNpmClient(rootPath) === 'pnpm'
   const catalogs = isPnpm ? await readPnpmCatalogs(rootPath) : undefined
   const allPkgDigests = await getAllPackageDigests(undefined, rootPath)
-  if (isPnpm) validateCatalogReferences(catalogs, allPkgDigests)
+  const inputs = capturePackageInputs(allPkgDigests)
+  if (isPnpm) validateCatalogReferences(catalogs, inputs)
 
-  let versionMap = options.versionMap!
+  const availableNames = Array.from(new Set([...inputs.flatMap(item => item.dependencyNames), ...getCatalogPackageNames(catalogs)]))
+  const requested = Array.from(new Set([...(options.packageNames || []), ...Object.keys(options.versionMap || {})]))
+  const unmatchedTargets = requested.filter(pattern => !availableNames.some(name => isPkgNameMatchingPattern(name, pattern)))
+
+  let versionMap = options.versionMap || {}
   if (Array.isArray(options.packageNames) && options.packageNames.length) {
-    const packageNames = flatPackageNames(options.packageNames, allPkgDigests, getCatalogPackageNames(catalogs))
+    const packageNames = flatPackageNames(options.packageNames, availableNames)
     const pkgsHasVersion = Object.keys(versionMap)
     const pkgsWithoutVersion = packageNames.filter(n => !pkgsHasVersion.some(pattern => isPkgNameMatchingPattern(n, pattern)))
     if (pkgsWithoutVersion.length) {
-      const versionFromNpm = await getVersionsFromRegistry({ pkgNames: pkgsWithoutVersion, versionStrategy: options.versionPickStrategy })
+      const versionFromNpm = await getVersionsFromRegistry({
+        pkgNames: pkgsWithoutVersion, versionStrategy: options.versionPickStrategy, throwOnError: strict, allowMissing: false,
+      })
       // add version range to versionFromNpm
       versionMap = Object.assign({}, versionFromNpm, versionMap)
     }
   }
   if (!versionMap || !Object.keys(versionMap).length) {
     logger.warn('[lerna-ci] no package names provided, nothing touched')
-    return false
   }
+  const skipped: ISyncSkipped[] = []
+  const customTransform = typeof options.versionRangeStrategy === 'function'
   const versionTransform = getVersionTransformer(options.versionRangeStrategy)
-  const catalogUpdate = planCatalogUpdates(catalogs, versionMap, versionTransform, options.exact)
+  const catalogUpdate = planCatalogUpdates(catalogs, versionMap, versionTransform, options.exact, skipped, customTransform)
   const manifestTransform = isPnpm
     ? (name: string, oldVersion: string, newVersion: string) => oldVersion.startsWith('catalog:') ? oldVersion : versionTransform(name, oldVersion, newVersion)
     : versionTransform
-  const pkgsUpdated = allPkgDigests.map((item): IChangedPackage | false => {
-    const changes = updatePackageJSON({
-      pkgDigest: item,
-      latestVersions: versionMap,
-      versionTransform: manifestTransform,
-      checkOnly: options.checkOnly,
-      exact: options.exact,
-    })
-    return changes && Object.assign({}, item, { changes })
-  }).filter((item): item is IChangedPackage => !!item)
+  const manifests = inputs.map(({ digest, content, manifest }) => planPackageJSON({
+    pkgDigest: digest, content, manifest,
+    latestVersions: versionMap,
+    versionTransform: manifestTransform,
+    exact: options.exact,
+  }, skipped, customTransform))
+  const pkgsUpdated = manifests.map((item, index): IChangedPackage | false => item.changes && { ...inputs[index].digest, changes: item.changes })
+    .filter((item): item is IChangedPackage => !!item)
+  const files = manifests.map(item => item.file)
   if (catalogUpdate) {
-    if (!options.checkOnly) catalogUpdate.write()
     pkgsUpdated.push(catalogUpdate.change)
   }
-  return !!pkgsUpdated.length && pkgsUpdated
+  if (catalogs) files.push(catalogUpdate?.file || { path: catalogs.file, before: catalogs.content, after: catalogs.content })
+  return createSyncPlan({
+    command: 'syncdeps', changes: pkgsUpdated, unmatchedTargets,
+    targets: Object.entries(versionMap).map(([name, version]) => ({ name, version, source: Object.prototype.hasOwnProperty.call(options.versionMap || {}, name) ? 'explicit' : 'registry' })),
+    skipped: skipped.filter(item => !isPnpm || !item.oldVersion.startsWith('catalog:')),
+  }, files, strict, options.requireMatch ?? false)
 }
 
 /**
  * flat package names according to mono package's all dependencies (e.g. convert @babel/* to all used scoped packages like @babel/core, @babel/preset-env)
  * @param packageNames package names that should update
- * @param allPkgDigests all mono packages' digest info
+ * @param allPackageNames all dependency and catalog names
  */
-function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[], catalogNames: string[]) {
+function flatPackageNames(packageNames: string[], allPackageNames: string[]) {
   const scopedNames:string[] = []
   const normalNames:string[] = []
   packageNames.forEach(name => {
@@ -127,7 +150,6 @@ function flatPackageNames(packageNames: string[], allPkgDigests: IPackageDigest[
     }
   })
   if (!scopedNames.length) return packageNames
-  const allPackageNames = Array.from(new Set([...getAllDependencies(allPkgDigests), ...catalogNames]))
   const scopedPkgNames = allPackageNames.filter(name => scopedNames.some(scope => isPkgNameMatchingPattern(name, scope)))
   logger.info(`[lerna-ci] found ${scopedPkgNames.length} scoped packages with patterns ${scopedNames.join(', ')}`)
   if (scopedPkgNames.length) {

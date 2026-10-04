@@ -14,7 +14,7 @@ const expectedExports = [
   'getVersionTransformer', 'getVersionsFromRegistry', 'isAsteriskPkgName', 'isLernaAvailable',
   'isManagedByLerna', 'isPkgNameMatchingPattern', 'isWin', 'logger', 'maxVersion', 'pickOne',
   'readPackageJson', 'readRootPkgJson', 'runNpmCmd', 'runShellCmd', 'setConfig', 'syncDeps',
-  'syncLocal', 'syncPruneGitTags', 'updatePackageJSON',
+  'syncLocal', 'syncPruneGitTags', 'updatePackageJSON', 'planSyncDeps', 'planSyncLocal',
 ]
 function run(command, args, cwd) {
   const result = spawn.sync(command, args, { cwd, encoding: 'utf8', timeout: 120000 })
@@ -60,13 +60,17 @@ async function main() {
     assert.match(run(process.execPath, [path.join(packageDir, cliEntry), '--help'], dir), /lerna-ci <cmd>/)
     if (!process.argv.includes('--runtime-only')) {
       fs.writeFileSync(path.join(dir, 'consumer.ts'), [
-        "import { syncLocal, syncDeps, getRepoNpmClient, getVersionTransformer, runShellCmd, EVerSource } from 'lerna-ci'",
+        "import { syncLocal, syncDeps, planSyncDeps, planSyncLocal, ISyncPlan, ISyncReport, getRepoNpmClient, getVersionTransformer, runShellCmd, EVerSource } from 'lerna-ci'",
         "const local: ReturnType<typeof syncLocal> = syncLocal({ checkOnly: true, versionSource: EVerSource.LOCAL })",
         "const deps: ReturnType<typeof syncDeps> = syncDeps({ versionMap: { react: '18.2.0' } })",
         "const client: ReturnType<typeof getRepoNpmClient> = getRepoNpmClient()",
         "const version: string = getVersionTransformer('^')('react', '1.0.0', '2.0.0')",
         "const output: Promise<string> = runShellCmd('git', ['status'], { cwd: '.' })",
-        'void [local, deps, client, version, output]',
+        "const plan: Promise<ISyncPlan> = planSyncDeps({ versionMap: { react: '18.2.0' }, requireMatch: true })",
+        "const localPlan: Promise<ISyncPlan> = planSyncLocal({ versionSource: EVerSource.LOCAL })",
+        "const apply = (value: ISyncPlan): Awaited<ReturnType<typeof syncDeps>> => value.apply()",
+        "const status = (report: ISyncReport): ISyncReport['status'] => report.status",
+        'void [local, deps, client, version, output, plan, localPlan, apply, status]',
       ].join('\n'))
       fs.writeFileSync(path.join(dir, 'interop.ts'), [
         "import config from 'lerna-ci/dist/fixpack-all/config'",

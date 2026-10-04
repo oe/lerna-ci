@@ -12,6 +12,7 @@ import {
 } from './types'
 import { PKG_DEP_KEYS } from './utils'
 import { logger } from './logger'
+import { applyPlannedFiles, ISyncSkipped } from './sync-plan'
 
 /**
  * get version transformer
@@ -79,17 +80,24 @@ export interface IUpdatePackageJSONOptions {
  * update a single pkg's package.json, return true if any things updated
  */
 export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedCategory[] | false {
-  const { pkgVersion, pkgDigest, latestVersions, checkOnly, versionTransform } = options
+  const plan = planPackageJSON(options)
+  if (plan.changes && !options.checkOnly) applyPlannedFiles([plan.file])
+  return plan.changes
+}
+
+/** Compute a manifest edit once, without invoking transforms again during application. */
+export function planPackageJSON(options: IUpdatePackageJSONOptions & { content?: string; manifest?: Record<string, any> }, skipped?: ISyncSkipped[], customTransform = false) {
+  const { pkgVersion, pkgDigest, latestVersions, versionTransform } = options
 
   const pkgPath = path.join(pkgDigest.location, 'package.json')
-  const content = fs.readFileSync(pkgPath, 'utf8')
+  const content = options.content ?? fs.readFileSync(pkgPath, 'utf8')
   // reserve trailing blank, to avoid unnecessary changes
   let trailing = ''
   if (/\}(\s+)$/.test(content)) {
     trailing = RegExp.$1
   }
   const changedCategories: IChangedCategory[] = []
-  const pkg = JSON.parse(content)
+  const pkg = options.manifest ?? JSON.parse(content)
   let hasChanged = false
   if (pkgVersion) {
     if (pkgVersion !== pkg.version) {
@@ -110,7 +118,14 @@ export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedC
       dependencies: pkg[key],
       versions: latestVersions,
       versionTransform,
-      exact: options.exact
+      exact: options.exact,
+      customTransform,
+      onSkipped: skipped ? (name, oldVersion, targetVersion) => {
+        skipped.push({
+          packageName: pkgDigest.name, location: pkgDigest.location, field: key, name, oldVersion, targetVersion,
+          ...describeSkippedVersion(oldVersion, targetVersion, customTransform),
+        })
+      } : undefined,
     })
     if (changes) {
       changedCategories.push({
@@ -120,16 +135,21 @@ export function updatePackageJSON(options: IUpdatePackageJSONOptions): IChangedC
       hasChanged = true
     }
   })
-  if (hasChanged) {
-    // write file only not in validation mode
-    if (!checkOnly) {
-      // keep its original indent
-      const indent = detectIndent(content).indent || 2
-      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, indent) + trailing)
-    }
-    return changedCategories
+  const after = hasChanged ? JSON.stringify(pkg, null, detectIndent(content).indent || 2) + trailing : content
+  return {
+    file: { path: pkgPath, before: content, after },
+    changes: hasChanged ? changedCategories : false as const,
   }
-  return false
+}
+
+export function describeSkippedVersion(oldVersion: string, targetVersion: string, customTransform: boolean): Pick<ISyncSkipped, 'reason' | 'requiresManualUpdate'> {
+  const reason = customTransform ? 'custom-transform' : oldVersion === '*' ? 'wildcard'
+    : !semver.validRange(oldVersion) ? 'non-semver' : 'complex-range'
+  return {
+    reason,
+    requiresManualUpdate: reason === 'complex-range' && !!semver.validRange(targetVersion)
+      && !semver.subset(targetVersion, oldVersion),
+  }
 }
 
 
@@ -151,6 +171,8 @@ interface IUpdateDepsVersionOptions {
    *  even set to true, versionTransform will be applied
    */
   exact?: boolean
+  customTransform?: boolean
+  onSkipped?: (name: string, oldVersion: string, targetVersion: string) => void
 }
 
 /**
@@ -158,7 +180,7 @@ interface IUpdateDepsVersionOptions {
  * @param deps original deps object
  * @param versions latest package versions
  */
-export function updateDepsVersion({ dependencies, versions, versionTransform, exact }:  IUpdateDepsVersionOptions): IChangedPkg[] | false {
+export function updateDepsVersion({ dependencies, versions, versionTransform, exact, customTransform, onSkipped }:  IUpdateDepsVersionOptions): IChangedPkg[] | false {
   let hasChanged = false
   if (!dependencies) return hasChanged
   const changed: IChangedPkg[] = []
@@ -176,6 +198,9 @@ export function updateDepsVersion({ dependencies, versions, versionTransform, ex
       })
       dependencies[name] = version
       hasChanged = true
+    } else if (onSkipped && dependencies[name] !== ver && (customTransform || !semver.validRange(dependencies[name])
+      || dependencies[name] === '*' || /\s/.test(dependencies[name].trim()))) {
+      onSkipped(name, dependencies[name], ver)
     }
   })
   return hasChanged && changed

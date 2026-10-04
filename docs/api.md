@@ -46,6 +46,64 @@ For package changes, fields include `version`, `dependencies`, `devDependencies`
 is `pnpm-workspace.yaml`, its location is the workspace root, and fields include
 `catalog` or `catalogs.next`. Git-backed operations can fetch tags even in check-only mode.
 
+## planSyncDeps / planSyncLocal
+
+These additive APIs accept the corresponding synchronization options and return
+`Promise<ISyncPlan>`. They resolve targets and compute all manifest/catalog edits
+before any writes. Unlike legacy `syncDeps`/`syncLocal`, they default to `strict: true`.
+`checkOnly` has no effect on a plan; call `apply()` explicitly to write it.
+
+```ts
+import { planSyncDeps, ISyncPlan } from 'lerna-ci'
+
+async function updateReact() {
+  const plan: ISyncPlan = await planSyncDeps({
+    versionMap: { react: '19.0.0' },
+    requireMatch: true,
+  })
+  console.log(plan.changes, plan.targets, plan.unmatchedTargets, plan.skipped)
+  return plan.apply() // synchronous; IChangedPackage[] | false
+}
+```
+
+| `ISyncPlan` field | Meaning |
+| --- | --- |
+| `command` | `syncdeps` or `synclocal` |
+| `changes` | Proposed `IChangedPackage[]`, including catalog updates |
+| `targets` | `{ name, version, source }[]`; source is `explicit`, `registry`, `local` or `git` |
+| `unmatchedTargets` | Requested dependency names/patterns with no matching dependency or catalog entry |
+| `skipped` | Entries whose requested updates were preserved by a built-in or custom transform |
+| `apply()` | Validate the plan and original input snapshots, then apply the computed edits |
+
+Each skipped entry contains `packageName`, `location`, `field`, `name`, `oldVersion`,
+`targetVersion`, `reason` and `requiresManualUpdate`. Reasons are `non-semver`,
+`wildcard`, `complex-range` and `custom-transform`. Protocols and `*` are intentionally
+preserved. Retained complex ranges that exclude the target set `requiresManualUpdate`
+and block strict application. Custom transforms retain control over their results.
+`exact: false` skips already-contained ranges without classifying them as blocked updates.
+pnpm catalog references are satisfied through catalog edits and do not appear as skipped.
+
+Strict registry failures reject planning. A completed plan can still contain blocked
+or unmatched entries for inspection; `apply()` rejects blocked entries in strict mode
+and rejects unmatched entries when `requireMatch` is enabled. The legacy APIs enforce
+the same validation in check-only mode when opted in. Strict `synclocal` permits
+unpublished members (`E404`) and fails if an explicit Git source has no Git repository.
+
+An application validates **all captured manifests** and any existing pnpm workspace
+YAML, including files needing no edits. Changed input raises `CIError('stale-plan', ...)`
+before any writes. Version transforms run during planning only. If a write fails,
+attempted files are restored in reverse order where possible; `write-failed` identifies
+any restoration failures. This is best-effort recovery, not crash-safe atomicity or
+concurrent-writer protection. Serialize applications with other manifest/lockfile tools.
+New files and changes to uncaptured configuration are outside these snapshot checks.
+Plans are in-memory, should be treated as read-only, and cannot be applied by deserializing
+their JSON representation. Create a new plan after editing inputs or applying changes.
+
+`ISyncReport` is exported for CLI JSON consumers. Its schema version is `1`, with
+`command`, `mode`, `status`, `changes`, `targets`, `unmatchedTargets`, `skipped` and
+`errors: { code, message }[]`. See [JSON status and exit codes](../readme.md#json-reports).
+Reports describe proposed edits; only `status: 'applied'` confirms successful application.
+
 ## syncLocal
 
 Align local dependency ranges and, for remote sources, package versions.
@@ -68,6 +126,7 @@ async function checkInternalRanges() {
 | `versionRangeStrategy` | `retain` (default), `^`, `~`, `>`, `>=`, empty string, or a custom transform |
 | `checkOnly` | Return proposed changes without writing manifests; default false |
 | `exact` | Apply the transformed version even when the target satisfies the old range; default true |
+| `strict` | Reject registry failures and incompatible retained complex ranges; default false for this legacy API |
 
 `LOCAL` uses local versions without querying registry or Git versions. Remote sources
 choose the maximum of local and selected remote versions. Private packages are
@@ -98,6 +157,8 @@ async function checkChosenDependencies() {
 | `versionRangeStrategy` | `retain` (default), `^`, `~`, `>`, `>=`, `<`, `<=`, empty string, or a custom transform |
 | `checkOnly` | Return proposed changes without writing manifests; default false |
 | `exact` | Apply the transformed version; set false to preserve a range containing the target |
+| `strict` | Reject registry failures and incompatible retained complex ranges; default false for this legacy API |
+| `requireMatch` | Reject requested names/patterns with no matching dependency or catalog entry; default false |
 
 Patterns such as `@babel/*` or `eslint-plugin-*` match names already present in the
 workspace or its pnpm catalogs. Explicit wildcard targets avoid redundant registry
@@ -199,16 +260,21 @@ replaces that configuration; see [fixpack options](https://github.com/HenrikJore
 | `getPackageVersionsFromGit(strategy?)` | Promise of a name/version map from `packageName@version` tags; fetches `origin` first |
 
 `getVersionFormRegistry` accepts `pkgName`, optional `version`, `versionStrategy`
-(`latest`, `max`, `max-stable`), `npmClient`, and `throwOnError`. An explicit version
+(`latest`, `max`, `max-stable`), `npmClient`, `throwOnError`, and `allowMissing`. An explicit version
 is returned only if found; absence can produce an empty string. Ordinary command
 failures warn and return undefined. `throwOnError: true` propagates failures except
 `E404`, which is treated as unpublished. Batch results omit unresolved versions.
+`allowMissing: false` also rejects `E404` when `throwOnError` is true. Batch strict
+lookups reject unusable versions and stop scheduling further requests after a failure;
+already-running requests finish. `syncdeps` strict mode requires targets to resolve;
+strict local recovery permits unpublished workspace members.
 For pnpm projects these helpers invoke npm, so configure npm/`.npmrc` for custom
 registries and authentication. pnpm's YAML-only registry settings are not consumed.
 Yarn projects use the corresponding Yarn command and configuration.
 
 `getVersionsFromRegistry` accepts `pkgNames`, optional `versionStrategy` (default
-`max`) and `npmClient`. Git helper strategies are `latest` (default: newest tag by
+`max`), `npmClient`, `throwOnError` (default false), and `allowMissing` (default true).
+Git helper strategies are `latest` (default: newest tag by
 creation date), `max` (highest semver), and `max-stable` (highest stable semver,
 falling back to prereleases when no stable version exists).
 

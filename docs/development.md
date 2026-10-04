@@ -70,6 +70,26 @@ registry request fails with an authentication, network, or server error. A missi
 package (`E404`) is treated as unpublished. General registry lookups retain their
 warning-and-undefined behavior; API callers can opt into errors with `throwOnError: true`.
 
+Synchronization CLI commands and new planning APIs use strict registry handling;
+legacy `syncLocal`/`syncDeps` calls remain lenient unless `strict: true` is supplied.
+Planning snapshots manifests before registry/Git lookups, computes each transform once,
+and reports target sources, unmatched requests and preserved specifiers. Application
+checks all captured input bytes before writing and restores attempted writes on ordinary
+I/O errors where possible. It does not provide crash-safe multi-file transactions or
+lockfile updates. Snapshot strings and proposed output consume memory proportional to
+workspace manifest/catalog size; applying a plan adds one input verification read per
+file, without a persistent cache or repeated registry lookups.
+A separate local check-only comparison against the preceding maintenance commit
+(200 packages, 30 dependencies each, ten measured iterations after two warmups)
+measured medians of 34.9 ms before versus 46.5 ms after for no edits, and 31.7 ms
+versus 42.9 ms for proposed edits. These are synthetic, offline results: planning
+and richer reports add work, so this change does not claim an overall speedup.
+
+CLI `--json` suppresses built-in logs and outputs one versioned synchronization report.
+Configuration files and custom callbacks are user code; their own console output is
+not suppressed. Tests cover strict/legacy differences, stale plans, partial write
+restoration, catalog/manifest transform failures, JSON errors and parser failures.
+
 CLI configuration uses the documented `lerna-ci` name. Existing `lerna-cli` files
 and package fields remain supported as a fallback. Invalid configuration now raises
 an error. `synclocal` CLI flags override configured source and range values.

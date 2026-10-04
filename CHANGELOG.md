@@ -6,6 +6,12 @@ This release is prepared on the maintenance branch and has not been published to
 
 ### Added
 
+- `planSyncDeps` and `planSyncLocal` return proposed changes, target version sources,
+  unmatched targets, skipped specifiers and an `apply()` function without rewriting
+  manifests during planning. Stale inputs block application; ordinary write errors
+  trigger best-effort restoration of attempted writes.
+- Synchronization CLI JSON reports (`--json`) with a versioned schema, status and
+  error codes. `syncdeps --require-match` rejects unmatched targets.
 - Automatic pnpm default and named catalog synchronization. Catalog references remain
   in manifests; version changes go to `pnpm-workspace.yaml` and preserve its comments,
   quoting and line endings. Check-only, explicit/wildcard targets and range strategies
@@ -21,6 +27,10 @@ This release is prepared on the maintenance branch and has not been published to
   CLI's local-only default; default API calls continue to rewrite satisfying ranges.
 - CLI `synclocal --help` and config-only `syncdeps` invocation. Missing targets now
   fail explicitly; existing command targets and the `syncremote` alias remain supported.
+- Synchronization computes every edit before writing. A later manifest transform
+  failure cannot leave earlier manifests or catalogs already updated.
+- CLI synchronization fails on registry lookup errors and incompatible retained
+  complex ranges instead of reporting a successful check with incomplete results.
 - Fresh workspace manifests, private/keyword filtering and duplicate root packages.
 - Literal arguments for internal commands and errors from missing or signal-terminated
   executables. The public `runShellCmd` retains shell execution by default.
@@ -48,6 +58,11 @@ This release is prepared on the maintenance branch and has not been published to
 - Invalid CLI configuration and empty CLI synchronization targets now fail explicitly.
   Release preflight also blocks unresolved Git conflicts and registry failures that
   the previous release could ignore. These stricter failures are intentional.
+- Synchronization CLI and new planning APIs are strict by default. Existing
+  `syncLocal`/`syncDeps` API calls keep lenient defaults; `strict: true` opts in.
+  Unmatched targets warn by default, and `--require-match` makes them fail.
+- Write-error restoration is best effort, not atomic across files or process crashes.
+  Synchronization does not update package-manager lockfiles.
 - Catalog support activates only in pnpm projects; npm/Yarn keep ordinary synchronization.
   Run the package manager install command after updates to refresh the lockfile.
 - Catalog targets apply across matching named catalogs. Shared YAML anchors/aliases,

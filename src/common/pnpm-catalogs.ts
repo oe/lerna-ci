@@ -1,8 +1,9 @@
 import fs from 'fs'
 import path from 'path'
 import { IChangedCategory, IChangedPackage, IPackageDigest, IVersionMap, IVerTransform } from './types'
-import { PKG_DEP_KEYS, readPackageJson } from './utils'
-import { updateDepsVersion } from './update-package'
+import { PKG_DEP_KEYS } from './utils'
+import { describeSkippedVersion, updateDepsVersion } from './update-package'
+import { ISyncSkipped } from './sync-plan'
 
 interface ICatalog {
   name: string
@@ -22,7 +23,9 @@ export async function readPnpmCatalogs(rootPath: string) {
   // Do not convert unrelated pnpm settings (including potentially large alias
   // graphs) when the workspace does not define catalogs. Root merges may define
   // catalogs indirectly, so they still need inspection.
-  if (!document.has('catalog') && !document.has('catalogs') && !document.has('<<')) return undefined
+  if (!document.has('catalog') && !document.has('catalogs') && !document.has('<<')) {
+    return { file, content, document, catalogs: new Map<string, ICatalog>(), overrides: undefined, rootPath, yaml }
+  }
   const manifest = document.toJS({ maxAliasCount: 100 }) || {}
   assertMap(manifest, 'pnpm workspace manifest')
   if (manifest.catalogs != null) assertMap(manifest.catalogs, 'catalogs')
@@ -57,7 +60,7 @@ export function getCatalogPackageNames(context: IPnpmCatalogs): string[] {
 }
 
 /** Validate all selected references before any manifest or workspace file is written. */
-export function validateCatalogReferences(context: IPnpmCatalogs, packages: IPackageDigest[]) {
+export function validateCatalogReferences(context: IPnpmCatalogs, packages: Array<{ digest: IPackageDigest; manifest: Record<string, any> }>) {
   const validate = (pkgName: string, specifier: unknown, source: string) => {
     if (typeof specifier !== 'string' || !specifier.startsWith('catalog:')) return
     const catalogName = specifier.slice('catalog:'.length).trim() || 'default'
@@ -66,8 +69,7 @@ export function validateCatalogReferences(context: IPnpmCatalogs, packages: IPac
       throw new Error(`No catalog entry ${pkgName} found in catalog ${catalogName} (${source})`)
     }
   }
-  for (const pkg of packages) {
-    const manifest = readPackageJson(pkg.location)
+  for (const { digest: pkg, manifest } of packages) {
     for (const key of PKG_DEP_KEYS) {
       for (const [name, version] of Object.entries(manifest[key] || {})) validate(name, version, `${pkg.name}.${key}`)
     }
@@ -82,13 +84,19 @@ export function validateCatalogReferences(context: IPnpmCatalogs, packages: IPac
 }
 
 /** Edit only version tokens so comments, quoting, other settings and CRLF survive. */
-export function planCatalogUpdates(context: IPnpmCatalogs, versions: IVersionMap, versionTransform: IVerTransform, exact?: boolean) {
+export function planCatalogUpdates(context: IPnpmCatalogs, versions: IVersionMap, versionTransform: IVerTransform, exact?: boolean, skipped?: ISyncSkipped[], customTransform = false) {
   if (!context) return undefined
   const { isNode, isMap, isScalar, stringify } = context.yaml
   const categories: IChangedCategory[] = []
   const edits: { start: number; end: number; value: string }[] = []
   for (const catalog of context.catalogs.values()) {
-    const changes = updateDepsVersion({ dependencies: { ...catalog.versions }, versions, versionTransform, exact })
+    const changes = updateDepsVersion({
+      dependencies: { ...catalog.versions }, versions, versionTransform, exact, customTransform,
+      onSkipped: (name, oldVersion, targetVersion) => skipped?.push({
+        packageName: 'pnpm-workspace.yaml', location: context.rootPath, field: catalog.path.join('.'), name, oldVersion, targetVersion,
+        ...describeSkippedVersion(oldVersion, targetVersion, customTransform),
+      }),
+    })
     if (!changes) continue
     categories.push({ field: catalog.path.join('.'), changes })
     const mapping = context.document.getIn(catalog.path, true)
@@ -124,5 +132,5 @@ export function planCatalogUpdates(context: IPnpmCatalogs, versions: IVersionMap
   const change: IChangedPackage = {
     name: 'pnpm-workspace.yaml', location: context.rootPath, private: true, changes: categories,
   }
-  return { change, write: () => fs.writeFileSync(context.file, content) }
+  return { change, file: { path: context.file, before: context.content, after: content } }
 }

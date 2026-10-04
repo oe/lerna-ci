@@ -1,21 +1,20 @@
 #!/usr/bin/env node
-import colors from 'picocolors'
-import yargs, { Options } from 'yargs'
+import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import {
-  syncLocal,
-  syncDeps,
+  planSyncLocal,
+  planSyncDeps,
   canPublish,
   fixpack,
   ISyncDepOptions,
   setConfig,
   logger,
-  getRepoNpmClient,
   getIndent,
   RELEASE_TYPES,
   getChanged,
 } from '../index'
 import { getCliConfig, CLI_NAME } from './config'
+import { printParseFailure, runSyncCommand, wantsJson } from './sync-command'
 import {
   printChangedPackageJsons,
   printGitSyncStatus,
@@ -24,7 +23,8 @@ import {
   printChangedPackages,
 } from './pretty-print'
 
-setConfig({ debug: true })
+const cliArgs = hideBin(process.argv)
+setConfig({ debug: !wantsJson(cliArgs) })
 
 
 const getVersionRangeOption = ()  => ({
@@ -34,19 +34,24 @@ const getVersionRangeOption = ()  => ({
     const rangeMap = { caret: '^', tilde: '~', gte: '>=', gt: '>', eq: '=', retain: 'retain' }
     const val = rangeMap[v] || (Object.values(rangeMap).includes(v) && v)
     if (!val) {
-      throw new Error(colors.red(`unsupported version range "${v}"`))
+      throw new Error(`unsupported version range "${v}"`)
     }
     return val
   }
 })
 
-const checkOnlyOptions: Options = {
-  alias: 'c',
-  describe: 'check for changes with package.json and pnpm-workspace.yaml files untouched',
-  type: 'boolean',
+const jsonOptions = {
+  describe: 'emit one JSON synchronization report on stdout',
+  type: 'boolean' as const,
 }
 
-yargs(hideBin(process.argv))
+const checkOnlyOptions = {
+  alias: 'c',
+  describe: 'check for changes with package.json and pnpm-workspace.yaml files untouched',
+  type: 'boolean' as const,
+}
+
+Promise.resolve().then(() => yargs(cliArgs)
   .scriptName(CLI_NAME)
   .usage('$0 <cmd> [args]')
   // command fixpack
@@ -104,6 +109,7 @@ yargs(hideBin(process.argv))
       })
       .option('range', getVersionRangeOption())
       .option('check-only', checkOnlyOptions)
+      .option('json', jsonOptions)
       .option('exact', {
         describe: 'use exact version with custom version `range` options(^, ~, >=, >, =, no punctuation)',
         alias: 'e',
@@ -112,43 +118,15 @@ yargs(hideBin(process.argv))
       })
       .version(false)
       .help(),
-    async (argv) => {
-      const cmdName = 'synclocal'
+    async (argv) => runSyncCommand('synclocal', argv, async () => {
       const repoConfig = await getCliConfig()
-      const cliMessage = argv.checkOnly
-        ? 'try to check local packages\' versions whether are synced'
-        : 'try to sync local packages\' versions'
-
-      console.log(`[${CLI_NAME}][${cmdName}] ${cliMessage}`)
       const source = argv.source ?? repoConfig.synclocal?.versionSource ?? repoConfig.synclocal?.source ?? 'local'
       const versionRange = argv.range ?? repoConfig.synclocal?.versionRangeStrategy ?? repoConfig.synclocal?.versionRange ?? 'retain'
-      const options = {
-        versionSource: source,
-        versionRangeStrategy: versionRange,
-        checkOnly: argv.checkOnly,
-        exact: argv.exact,
-      }
       // @ts-ignore
-      const updatedPkgs = await syncLocal(options)
-
-      if (updatedPkgs) {
-        logger.log(`[${CLI_NAME}][${cmdName}] the following manifests ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
-        await printChangedPackageJsons(updatedPkgs)
-        if (!argv.checkOnly) {
-          let npmClient = await getRepoNpmClient()
-          npmClient = /^yarn/.test(npmClient) ? 'yarn' : npmClient
-          await logger.log(`[${CLI_NAME}][${cmdName}] you may need run \`${npmClient} install\` to make changes take effect`)
-        } else {
-          logger.error(`[${CLI_NAME}][${cmdName}] local packages' versions are messed`)
-          // throw an error when checking
-          process.exit(1)
-        }
-      } else {
-        logger.success(`[${CLI_NAME}][${cmdName}] all packages.json files' are up to update${argv.checkOnly ? '': ', nothing touched'}`)
-      }
-      console.log('')
-    }
+      return planSyncLocal({ versionSource: source, versionRangeStrategy: versionRange, exact: argv.exact })
+    })
   )
+
   // command syncdeps
   .command(
     ['syncdeps [packages...]','syncremote'],
@@ -171,6 +149,7 @@ yargs(hideBin(process.argv))
         array: true
       })
       .option('range', getVersionRangeOption())
+      .option('require-match', { type: 'boolean', describe: 'fail if any target matches no dependency or catalog entry' })
       .option('exact', {
         describe: 'use exact version with custom version `range` options(^, ~, >=, >, =, no punctuation), or only update when existing version range is not satisfied',
         alias: 'e',
@@ -178,41 +157,18 @@ yargs(hideBin(process.argv))
         default: true,
       })
       .option('check-only', checkOnlyOptions)
+      .option('json', jsonOptions)
       .help(),
-    async (argv) => {
-      const cmdName = 'syncdeps'
+    async (argv) => runSyncCommand('syncdeps', argv, async () => {
       const repoConfig = await getCliConfig()
-      const syncRemoteConfig = argv.packages?.length ? argv.packages : repoConfig.syncremote
-      if (!syncRemoteConfig || !Object.keys(syncRemoteConfig).length) {
+      const targets = argv.packages?.length ? argv.packages : repoConfig.syncremote
+      if (!targets || !Object.keys(targets).length) {
         throw new Error('Provide package targets or configure lerna-ci.syncremote before running syncdeps')
       }
-      logger.info(`[${CLI_NAME}][${cmdName}] try to sync packages' dependencies' versions`)
-      const options = Array.isArray(syncRemoteConfig)
-        ? parsePackageNames(syncRemoteConfig)
-        : { versionMap: syncRemoteConfig }
+      const options = Array.isArray(targets) ? parsePackageNames(targets) : { versionMap: targets }
       // @ts-ignore
-      const updatedPkgs = await syncDeps(Object.assign(options, {
-        versionRangeStrategy: argv.range ?? 'retain',
-        checkOnly: argv.checkOnly,
-        exact: argv.exact,
-      }))
-      if (updatedPkgs) {
-        logger.log(`[${CLI_NAME}][${cmdName}] the following manifests' dependencies ${argv.checkOnly ? 'can be updated' : 'are updated'}:`)
-        await printChangedPackageJsons(updatedPkgs)
-        if (!argv.checkOnly) {
-          let npmClient = await getRepoNpmClient()
-          npmClient = /^yarn/.test(npmClient) ? 'yarn' : npmClient
-          await logger.log(`[${CLI_NAME}][${cmdName}] you may need run \`${npmClient} install\` to make changes take effect`)
-        } else {
-          logger.error(`[${CLI_NAME}][${cmdName}] local packages' dependencies is outdated`)
-          // throw an error when checking
-          process.exit(1)
-        }
-      } else {
-        logger.success(`[${CLI_NAME}][${cmdName}] all package.json files' dependencies are up to update, nothing touched`)
-      }
-      console.log('')
-    }
+      return planSyncDeps({ ...options, versionRangeStrategy: argv.range ?? 'retain', exact: argv.exact, requireMatch: argv.requireMatch })
+    })
   )
 
   .command(
@@ -291,7 +247,12 @@ yargs(hideBin(process.argv))
   // require command or throw an error and output help info
   .demandCommand(1)
   .strict()
-  .parse()
+  .exitProcess(false)
+  .fail((message, error, parser) => {
+    if (!wantsJson(cliArgs)) parser.showHelp('error')
+    throw error || new Error(message)
+  })
+  .parseAsync()).catch(error => printParseFailure(error, cliArgs))
 
 
 

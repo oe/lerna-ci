@@ -729,6 +729,305 @@ for (const packageManager of ['npm@10.0.0', 'yarn@1.22.22']) {
   }))
 }
 
+
+function snapshotManifests(dir, locations) {
+  return locations.map(location => [path.join(dir, location, 'package.json'), fs.readFileSync(path.join(dir, location, 'package.json'), 'utf8')])
+}
+function assertSnapshots(snapshots) {
+  for (const [file, content] of snapshots) assert.strictEqual(fs.readFileSync(file, 'utf8'), content)
+}
+function jsonCli(dir, args, preload) {
+  const result = spawnSync(process.execPath, [
+    ...(preload ? ['--require', preload] : []), path.join(dist, 'bin/index.js'), ...args, '--json',
+  ], { cwd: dir, encoding: 'utf8', timeout: 15000 })
+  assert.ifError(result.error)
+  assert.strictEqual(result.stderr, '', result.stderr)
+  const report = JSON.parse(result.stdout)
+  assert.strictEqual(report.schemaVersion, 1)
+  return { ...result, report }
+}
+
+for (const command of ['syncDeps', 'syncLocal']) {
+  test(`${command} plans every manifest before a later transform can fail`, () => fixture(async dir => {
+    write(path.join(dir, 'packages/a'), { name: 'a', version: '2.0.0', dependencies: { a: '^1.0.0' } })
+    write(path.join(dir, 'packages/b'), { name: 'b', version: '1.0.0', dependencies: { a: '^1.1.0' } })
+    const snapshots = snapshotManifests(dir, ['.', 'packages/a', 'packages/b'])
+    await assert.rejects(api[command]({
+      versionMap: { a: '2.0.0' }, versionSource: 'local',
+      versionRangeStrategy: (_name, oldVersion, target) => {
+        if (oldVersion === '^1.1.0') throw new Error('later transform failed')
+        return '^' + target
+      },
+    }), /later transform failed/)
+    assertSnapshots(snapshots)
+  }))
+}
+
+test('planSyncDeps is read-only and apply uses the planned transform exactly once', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0' } })
+  const snapshots = snapshotManifests(dir, ['.'])
+  let calls = 0
+  const plan = await api.planSyncDeps({ versionMap: { react: '2.0.0' }, versionRangeStrategy: (_name, _old, target) => { calls++; return '~' + target } })
+  assertSnapshots(snapshots)
+  assert.strictEqual(calls, 1)
+  assert.deepStrictEqual(plan.targets, [{ name: 'react', version: '2.0.0', source: 'explicit' }])
+  assert.deepStrictEqual(plan.apply(), plan.changes)
+  assert.strictEqual(calls, 1)
+  assert.strictEqual(JSON.parse(fs.readFileSync(snapshots[0][0])).dependencies.react, '~2.0.0')
+  assert.throws(() => plan.apply(), /stale/)
+}))
+
+test('apply rejects changes to any input manifest before writing even unchanged inputs', () => fixture(async dir => {
+  write(path.join(dir, 'packages/a'), { name: 'a', version: '1.0.0', dependencies: { react: '^1.0.0' } })
+  write(path.join(dir, 'packages/b'), { name: 'b', version: '1.0.0' })
+  const plan = await api.planSyncDeps({ versionMap: { react: '2.0.0' } })
+  const updatedFile = snapshotManifests(dir, ['packages/a'])
+  write(path.join(dir, 'packages/b'), { name: 'b', version: '2.0.0' })
+  assert.throws(() => plan.apply(), /stale/)
+  assertSnapshots(updatedFile)
+}))
+
+test('apply rejects an input changed during asynchronous registry resolution', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0' } })
+  let plan
+  await patch(utils, 'runShellCmd', async () => {
+    write(dir, { name: 'root', private: true, dependencies: { react: '^1.5.0' } })
+    return JSON.stringify('2.0.0')
+  }, async () => { plan = await api.planSyncDeps({ packageNames: ['react'] }) })
+  assert.throws(() => plan.apply(), /stale/)
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).dependencies.react, '^1.5.0')
+}))
+
+test('apply restores earlier files and a partially written file on ordinary write errors', () => fixture(async dir => {
+  write(path.join(dir, 'packages/a'), { name: 'a', dependencies: { react: '^1.0.0' } })
+  write(path.join(dir, 'packages/b'), { name: 'b', dependencies: { react: '^1.0.0' } })
+  const snapshots = snapshotManifests(dir, ['.', 'packages/a', 'packages/b'])
+  const plan = await api.planSyncDeps({ versionMap: { react: '2.0.0' } })
+  const original = fs.writeFileSync
+  let writes = 0
+  await patch(fs, 'writeFileSync', (file, content, ...rest) => {
+    if (++writes === 2) { original(file, 'partial contents'); throw new Error('simulated I/O failure') }
+    return original(file, content, ...rest)
+  }, async () => assert.throws(() => plan.apply(), /attempted changes restored/))
+  assert.strictEqual(writes, 4, 'write only changed files, then restore both attempted writes')
+  assertSnapshots(snapshots)
+}))
+
+test('apply identifies files that cannot be restored after a write failure', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0' } })
+  const plan = await api.planSyncDeps({ versionMap: { react: '2.0.0' } })
+  await patch(fs, 'writeFileSync', () => { throw new Error('read-only disk') }, async () => {
+    assert.throws(() => plan.apply(), error => error.type === 'write-failed' && /unable to restore:.*package.json/.test(error.message))
+  })
+}))
+
+for (const failure of ['E401 unauthorized', 'E404 missing package', 'E500 server error', 'ENETUNREACH network']) {
+  test(`strict planning rejects ${failure} while the legacy API keeps its lenient default`, () => fixture(async dir => {
+    write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0' } })
+    const snapshots = snapshotManifests(dir, ['.'])
+    await patch(utils, 'runShellCmd', async () => { throw new Error(failure) }, async () => {
+      await assert.rejects(api.planSyncDeps({ packageNames: ['react'] }), error => error.type === 'registry-error' && error.message.includes(failure))
+      await assert.rejects(api.syncDeps({ packageNames: ['react'], strict: true, checkOnly: true }), /Unable to resolve/)
+      assert.strictEqual(await api.syncDeps({ packageNames: ['react'] }), false)
+    })
+    assertSnapshots(snapshots)
+  }))
+}
+
+for (const version of ['', 'invalid', { error: 'invalid registry response' }]) {
+  test(`strict registry lookup rejects an unusable version: ${JSON.stringify(version)}`, async () => {
+    await patch(utils, 'runShellCmd', async () => JSON.stringify(version), async () => {
+      await assert.rejects(api.getVersionsFromRegistry({ pkgNames: ['react'], npmClient: 'npm', versionStrategy: 'latest', throwOnError: true }), /no usable version/)
+    })
+  })
+}
+
+test('strict local recovery permits unpublished packages and reports the winning sources', () => fixture(async dir => {
+  write(path.join(dir, 'packages/a'), { name: 'a', version: '1.0.0' })
+  write(path.join(dir, 'packages/b'), { name: 'b', version: '1.0.0' })
+  await patch(utils, 'runShellCmd', async (_cmd, args) => {
+    if (args[1] === 'a') throw new Error('E404 unpublished')
+    return JSON.stringify('2.0.0')
+  }, async () => {
+    const plan = await api.planSyncLocal({ versionSource: 'npm' })
+    assert.deepStrictEqual(plan.targets, [
+      { name: 'a', version: '1.0.0', source: 'local' },
+      { name: 'b', version: '2.0.0', source: 'registry' },
+      { name: 'root', version: '1.0.0', source: 'local' },
+    ])
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'packages/b/package.json'))).version, '1.0.0')
+    plan.apply()
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'packages/b/package.json'))).version, '2.0.0')
+  })
+}))
+
+test('strict Git-only plans reject an unavailable source instead of falling back silently', () => fixture(async () => {
+  await assert.rejects(api.planSyncLocal({ versionSource: 'git' }), /requires a Git repository/)
+  assert.strictEqual(await api.syncLocal({ versionSource: 'git', checkOnly: true }), false)
+}))
+
+test('unmatched targets are reported and requireMatch blocks application', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0' } })
+  const plan = await api.planSyncDeps({ versionMap: { react: '2.0.0', 'missing-*': '2.0.0' }, requireMatch: true })
+  assert.deepStrictEqual(plan.unmatchedTargets, ['missing-*'])
+  assert.throws(() => plan.apply(), error => error.type === 'unmatched-target')
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).dependencies.react, '^1.0.0')
+  await assert.rejects(api.syncDeps({ versionMap: { missing: '2.0.0' }, requireMatch: true, checkOnly: true }), /No dependencies/)
+}))
+
+test('plans explain preserved protocols, wildcards and custom transforms', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { a: 'workspace:*', b: '*', c: 'npm:other@^1.0.0' } })
+  const plan = await api.planSyncDeps({ versionMap: { a: '2.0.0', b: '2.0.0', c: '2.0.0' } })
+  assert.deepStrictEqual(plan.skipped.map(item => [item.name, item.reason, item.requiresManualUpdate]), [
+    ['a', 'non-semver', false], ['b', 'wildcard', false], ['c', 'non-semver', false],
+  ])
+  assert.strictEqual(plan.apply(), false)
+  const custom = await api.planSyncDeps({ versionMap: { a: '2.0.0' }, versionRangeStrategy: (_name, old) => old })
+  assert.strictEqual(custom.skipped[0].reason, 'custom-transform')
+}))
+
+test('strict plans block incompatible complex ranges but permit containment and explicit range replacement', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0 || ^2.0.0', direct: '^1.0.0' } })
+  const snapshots = snapshotManifests(dir, ['.'])
+  const plan = await api.planSyncDeps({ versionMap: { react: '3.0.0', direct: '2.0.0' } })
+  assert.strictEqual(plan.skipped[0].requiresManualUpdate, true)
+  assert.throws(() => plan.apply(), error => error.type === 'manual-update-required')
+  await assert.rejects(api.syncDeps({ versionMap: { react: '3.0.0' }, strict: true, checkOnly: true }), /update these ranges manually/)
+  assertSnapshots(snapshots)
+  const contained = await api.planSyncDeps({ versionMap: { react: '2.0.0' }, exact: false })
+  assert.strictEqual(contained.skipped.length, 0)
+  assert.strictEqual(contained.apply(), false)
+  const replaced = await api.planSyncDeps({ versionMap: { react: '3.0.0' }, versionRangeStrategy: '^' })
+  replaced.apply()
+  assert.strictEqual(JSON.parse(fs.readFileSync(snapshots[0][0])).dependencies.react, '^3.0.0')
+}))
+
+test('JSON CLI reports checks, applications and no-op results with stable exit codes', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0' } })
+  const snapshots = snapshotManifests(dir, ['.'])
+  let result = jsonCli(dir, ['syncdeps', 'react@2.0.0', '--check-only'])
+  assert.strictEqual(result.status, 1)
+  assert.strictEqual(result.report.status, 'changes-needed')
+  assert.strictEqual(result.report.mode, 'check')
+  assert.strictEqual(result.report.changes.length, 1)
+  assert.deepStrictEqual(result.report.errors, [])
+  assertSnapshots(snapshots)
+  result = jsonCli(dir, ['syncremote', 'react@2.0.0'])
+  assert.strictEqual(result.status, 0)
+  assert.strictEqual(result.report.command, 'syncdeps')
+  assert.strictEqual(result.report.status, 'applied')
+  result = jsonCli(dir, ['syncdeps', 'react@2.0.0', '--check-only'])
+  assert.strictEqual(result.status, 0)
+  assert.strictEqual(result.report.status, 'unchanged')
+  result = jsonCli(dir, ['synclocal', 'local', '--check-only'])
+  assert.strictEqual(result.report.command, 'synclocal')
+  assert.strictEqual(result.status, 0)
+}))
+
+test('JSON CLI reports unmatched targets and can require a match before all edits', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0' } })
+  const snapshots = snapshotManifests(dir, ['.'])
+  let result = jsonCli(dir, ['syncdeps', 'react@2.0.0', 'typo@2.0.0', '--require-match'])
+  assert.strictEqual(result.status, 1)
+  assert.strictEqual(result.report.status, 'failed')
+  assert.strictEqual(result.report.errors[0].code, 'unmatched-target')
+  assert.deepStrictEqual(result.report.unmatchedTargets, ['typo'])
+  assertSnapshots(snapshots)
+  result = jsonCli(dir, ['syncdeps', 'typo@2.0.0'])
+  assert.strictEqual(result.status, 0)
+  assert.strictEqual(result.report.status, 'unchanged')
+  assert.deepStrictEqual(result.report.unmatchedTargets, ['typo'])
+  const text = cli(dir, 'syncdeps', 'typo@2.0.0')
+  assert.ok((text.stdout + text.stderr).includes('unmatched targets'))
+  assert.ok(!(text.stdout + text.stderr).includes('all dependencies are up to date'))
+}))
+
+test('JSON CLI blocks unsupported complex ranges and preserves other proposed changes', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0 || ^2.0.0', direct: '^1.0.0' } })
+  const snapshots = snapshotManifests(dir, ['.'])
+  const result = jsonCli(dir, ['syncdeps', 'react@3.0.0', 'direct@2.0.0', '--check-only'])
+  assert.strictEqual(result.status, 1)
+  assert.strictEqual(result.report.status, 'failed')
+  assert.strictEqual(result.report.errors[0].code, 'manual-update-required')
+  assert.strictEqual(result.report.skipped[0].reason, 'complex-range')
+  assert.strictEqual(result.report.changes.length, 1)
+  assertSnapshots(snapshots)
+}))
+
+test('JSON CLI fails on registry authentication errors before applying explicit targets', () => fixture(async dir => {
+  write(dir, { name: 'root', private: true, dependencies: { react: '^1.0.0', other: '^1.0.0' } })
+  const snapshots = snapshotManifests(dir, ['.'])
+  const preload = path.join(dir, 'registry failure.cjs')
+  fs.writeFileSync(preload, `const utils = require(${JSON.stringify(path.join(dist, 'common/utils'))}); const original = utils.runShellCmd; utils.runShellCmd = async (cmd, args, options) => { if (cmd === 'npm') throw new Error('E401 unauthorized'); return original(cmd, args, options) }`)
+  for (const mode of [[], ['--check-only']]) {
+    const result = jsonCli(dir, ['syncdeps', 'react@2.0.0', 'other', ...mode], preload)
+    assert.strictEqual(result.status, 1)
+    assert.strictEqual(result.report.status, 'failed')
+    assert.strictEqual(result.report.errors[0].code, 'registry-error')
+    assert.match(result.report.errors[0].message, /E401 unauthorized/)
+    assertSnapshots(snapshots)
+  }
+}))
+
+for (const args of [
+  ['syncdeps', 'react@2.0.0', '--range', 'bad', '--check-only'],
+  ['syncdeps', 'react@2.0.0', '--unknown', '--check-only=false'],
+  ['synclocal', 'invalid-source', '-c'],
+  ['syncdeps'],
+]) {
+  test(`JSON CLI catches parser and configuration errors: ${args.join(' ')}`, () => fixture(async dir => {
+    const result = jsonCli(dir, args)
+    assert.strictEqual(result.status, 1)
+    assert.strictEqual(result.report.status, 'failed')
+    assert.strictEqual(result.report.command, args[0])
+    assert.ok(result.report.errors[0].message)
+    if (args.includes('--check-only=false')) assert.strictEqual(result.report.mode, 'apply')
+  }))
+}
+
+test('catalog plans preserve references, explain catalog changes and reject stale YAML before manifest writes', () => catalogFixture(
+  '# keep\ncatalog:\n  react: "^1.0.0"\n',
+  { 'packages/app': { name: 'app', dependencies: { react: 'catalog:', direct: '^1.0.0' } } },
+  async (dir, file) => {
+    const snapshots = snapshotManifests(dir, ['.', 'packages/app'])
+    const plan = await api.planSyncDeps({ versionMap: { react: '2.0.0', direct: '2.0.0' } })
+    assert.strictEqual(plan.changes.length, 2)
+    assert.strictEqual(plan.skipped.length, 0, 'catalog references are fulfilled by the catalog update')
+    assert.deepStrictEqual(plan.unmatchedTargets, [])
+    assertSnapshots(snapshots)
+    fs.appendFileSync(file, '# external edit\n')
+    assert.throws(() => plan.apply(), /stale/)
+    assertSnapshots(snapshots)
+  },
+))
+
+test('catalog planning does not partially write YAML when a later manifest transform fails', () => catalogFixture(
+  'catalog:\n  react: ^1.0.0\n',
+  { 'packages/app': { name: 'app', dependencies: { react: 'catalog:', direct: '^1.0.0' } } },
+  async (dir, file) => {
+    const before = fs.readFileSync(file, 'utf8')
+    const snapshots = snapshotManifests(dir, ['.', 'packages/app'])
+    await assert.rejects(api.syncDeps({ versionMap: { react: '2.0.0', direct: '2.0.0' }, versionRangeStrategy: (name, _old, target) => {
+      if (name === 'direct') throw new Error('manifest transform failed')
+      return '^' + target
+    } }), /manifest transform failed/)
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), before)
+    assertSnapshots(snapshots)
+  },
+))
+
+test('plans reject changes to pnpm workspace settings even without catalogs', () => catalogFixture(
+  'packages: [packages/*]\n',
+  { 'packages/app': { name: 'app', dependencies: { react: '^1.0.0' } } },
+  async (dir, file) => {
+    const plan = await api.planSyncDeps({ versionMap: { react: '2.0.0' } })
+    const snapshots = snapshotManifests(dir, ['.', 'packages/app'])
+    fs.appendFileSync(file, 'exclude: [packages/app]\n')
+    assert.throws(() => plan.apply(), /stale/)
+    assertSnapshots(snapshots)
+  },
+))
+
 ;(async () => {
   let failed = 0
   for (const { name, run } of tests) {

@@ -1,7 +1,8 @@
 import path from 'path'
 import fs from 'fs'
+import semver from 'semver'
 import { IGetPkgVersionFromRegistryOptions } from './common'
-import { runShellCmd, getProjectRoot, readPackageJson } from '../../utils'
+import { runShellCmd, getProjectRoot, readPackageJson, CIError } from '../../utils'
 import { IVersionPickStrategy, IVersionMap } from '../../types'
 import { logger } from '../../logger'
 import * as npm from './npm'
@@ -33,12 +34,16 @@ export interface IGetPkgVersionsFromRegistryOptions {
    * preferred npm client, detect automatically if not provided
    */
   npmClient?: INpmClient
+  /** Reject registry failures instead of returning partial results. Default false. */
+  throwOnError?: boolean
+  /** Permit unpublished packages (E404); useful for local version recovery. Default true. */
+  allowMissing?: boolean
 }
 
 /**
  * get versions from npm registry
  */
-export async function getVersionsFromRegistry({ pkgNames, versionStrategy, npmClient }: IGetPkgVersionsFromRegistryOptions) {
+export async function getVersionsFromRegistry({ pkgNames, versionStrategy, npmClient, throwOnError, allowMissing }: IGetPkgVersionsFromRegistryOptions) {
   const result: IVersionMap = {}
   const client = npmClient || await getRepoNpmClient()
   if (!processors[client]) {
@@ -47,17 +52,23 @@ export async function getVersionsFromRegistry({ pkgNames, versionStrategy, npmCl
   const names = Array.from(new Set(pkgNames))
   const versions: Array<string | undefined> = new Array(names.length)
   let cursor = 0
+  let failure: CIError | undefined
   const worker = async () => {
-    while (cursor < names.length) {
+    while (cursor < names.length && !failure) {
       const index = cursor++
-      versions[index] = await getVersionFormRegistry({
-        pkgName: names[index],
-        versionStrategy: versionStrategy || 'max',
-        npmClient: client
-      })
+      try {
+        versions[index] = await getVersionFormRegistry({
+          pkgName: names[index], versionStrategy: versionStrategy || 'max', npmClient: client, throwOnError, allowMissing,
+        })
+        if (throwOnError && allowMissing === false && !versions[index]) throw new Error('no usable version returned')
+        if (throwOnError && versions[index] !== undefined && !semver.valid(versions[index])) throw new Error('no usable version returned')
+      } catch (error) {
+        failure = failure || new CIError('registry-error', `Unable to resolve ${names[index]} from registry: ${String(error)}`)
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(6, names.length) }, worker))
+  if (failure) throw failure
   names.forEach((name, index) => {
     const version = versions[index]
     if (version) result[name] = version
@@ -66,7 +77,7 @@ export async function getVersionsFromRegistry({ pkgNames, versionStrategy, npmCl
 }
 
 export async function getVersionFormRegistry(
-  options: IGetPkgVersionFromRegistryOptions & {npmClient?: INpmClient; throwOnError?: boolean }): Promise<string | undefined> {
+  options: IGetPkgVersionFromRegistryOptions & {npmClient?: INpmClient; throwOnError?: boolean; allowMissing?: boolean }): Promise<string | undefined> {
   const npmClient = options.npmClient || await getRepoNpmClient()
   const client = processors[npmClient]
   if (!client) {
@@ -77,7 +88,7 @@ export async function getVersionFormRegistry(
     return version
   } catch (error: any) {
     // A missing package has no occupied versions; other failures must block publish checks.
-    if (options.throwOnError && !/\bE404\b/.test(String(error))) throw error
+    if (options.throwOnError && (options.allowMissing === false || !/\bE404\b/.test(String(error)))) throw error
     logger.warn(`[lerna-ci] unable to get version of ${options.pkgName} from registry`, error instanceof Error ? error.message : String(error))
     return
   }

@@ -17,6 +17,7 @@ these operations through the TypeScript/CommonJS API. Lerna is optional for sync
 - [Commands](#commands)
 - [pnpm catalogs](#pnpm-catalogs)
 - [CI checks](#ci-checks)
+- [JSON reports](#json-reports)
 - [Release preflight](#release-preflight)
 - [Configuration](#configuration)
 - [Library API](#library-api)
@@ -191,7 +192,7 @@ on every pull request. For example, add these scripts to the root `package.json`
 {
   "scripts": {
     "versions:check": "lerna-ci synclocal local --exact false --check-only",
-    "deps:check": "lerna-ci syncdeps react@19.0.0 react-dom@19.0.0 --exact false --check-only"
+    "deps:check": "lerna-ci syncdeps react@19.0.0 react-dom@19.0.0 --exact false --require-match --check-only"
   }
 }
 ```
@@ -223,6 +224,33 @@ jobs:
 These checks leave manifests and catalogs unchanged. A version mismatch fails the
 job; a matching range passes. Dependencies declared through `workspace:*` or
 `workspace:^` are preserved because the package manager handles their version expansion.
+Synchronization commands fail on registry authentication, network and server errors,
+and on complex retained ranges that cannot include the target. Unmatched targets
+are reported; `syncdeps --require-match` makes them fail the check as well.
+
+## JSON reports
+
+`syncdeps`, its `syncremote` alias, and `synclocal` accept `--json`:
+
+```sh
+pnpm exec lerna-ci syncdeps react@19.0.0 --check-only --require-match --json
+```
+
+The command emits one JSON object on stdout, with built-in logs suppressed.
+`schemaVersion: 1` includes `changes`, `targets` with their version sources,
+`unmatchedTargets`, `skipped` with reasons, and `errors` with codes and messages.
+`mode` is `check` or `apply`; inspect `status` to interpret the result:
+
+| Status | Exit code | Meaning |
+| --- | --- | --- |
+| `unchanged` | 0 | No applicable edits; review any unmatched targets or preserved specifiers |
+| `changes-needed` | 1 | Check-only found proposed edits; files remain untouched |
+| `applied` | 0 | Planned edits were applied |
+| `failed` | 1 | The operation failed; `changes` may contain proposed edits, not completed edits |
+
+Managed specifiers such as `workspace:*`, aliases and `*` are preserved and reported
+as skipped. A complex range retained outside the target requires manual editing
+or a different `--range` strategy. JSON reporting does not update the lockfile.
 
 ## Release preflight
 
@@ -310,6 +338,23 @@ checkVersions().catch(error => { console.error(error); process.exitCode = 1 })
 Synchronization returns `IChangedPackage[] | false`. A catalog change appears as a
 `pnpm-workspace.yaml` item with fields such as `catalog` or `catalogs.next`.
 CommonJS `require('lerna-ci')` remains supported; TypeScript declarations are included.
+Existing `syncLocal`/`syncDeps` API calls retain lenient registry handling by default;
+use `strict: true` for CI checks. The new planning APIs are strict by default:
+
+```ts
+import { planSyncDeps } from 'lerna-ci'
+
+async function updateChosenVersion() {
+  const plan = await planSyncDeps({ versionMap: { react: '19.0.0' }, requireMatch: true })
+  console.log(plan.changes, plan.skipped, plan.unmatchedTargets)
+  return plan.apply()
+}
+```
+
+Planning leaves manifests and catalogs untouched. Application checks that every
+input file still matches its snapshot before writing and attempts to restore files
+on write errors. This is not a crash-safe transaction; serialize synchronization
+with other tools that edit the same files.
 
 [Full API reference](https://github.com/oe/lerna-ci/blob/main/docs/api.md) ·
 [Development, compatibility and validation](https://github.com/oe/lerna-ci/blob/main/docs/development.md)

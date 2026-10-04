@@ -5,7 +5,6 @@ import {
   EVerSource,
   getAllPackageDigests,
   IPackageFilterOptions,
-  updatePackageJSON,
   getVersionsFromRegistry,
   getPackageVersionsFromGit,
   IVersionPickStrategy,
@@ -14,9 +13,12 @@ import {
   getGitRoot,
   getProjectRoot,
   getRepoNpmClient,
-  IChangedPackage
+  IChangedPackage,
+  CIError,
 } from '../common'
 import { planCatalogUpdates, readPnpmCatalogs, validateCatalogReferences } from '../common/pnpm-catalogs'
+import { capturePackageInputs, createSyncPlan, ISyncPlan, ISyncSkipped, ISyncTarget, validateSyncPlan } from '../common/sync-plan'
+import { planPackageJSON } from '../common/update-package'
 
 export interface ISyncPackageOptions {
   /**
@@ -49,6 +51,8 @@ export interface ISyncPackageOptions {
    * @default true
    */
   exact?: boolean
+  /** Reject registry failures and ranges requiring manual changes. Legacy API default false. */
+  strict?: boolean
 }
 
 const DEFAULT_OPTIONS: ISyncPackageOptions = {
@@ -65,7 +69,16 @@ const DEFAULT_OPTIONS: ISyncPackageOptions = {
  *  return all packages' digest info that need to update (has been upated if isValidate is false)
  */
 export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<IChangedPackage[] | false> {
+  const options = { ...syncOptions, strict: syncOptions.strict ?? false }
+  const plan = await planSyncLocal(options)
+  validateSyncPlan(plan, options.strict)
+  return options.checkOnly ? (plan.changes.length ? plan.changes : false) : plan.apply()
+}
+
+/** Plan all edits without writing. Keeps the API's all-source default; strict by default. */
+export async function planSyncLocal(syncOptions: ISyncPackageOptions = {}): Promise<ISyncPlan> {
   const options = Object.assign({}, DEFAULT_OPTIONS, syncOptions)
+  const strict = options.strict ?? true
   const rootPath = await getProjectRoot()
   const isPnpm = await getRepoNpmClient(rootPath) === 'pnpm'
   const catalogs = isPnpm ? await readPnpmCatalogs(rootPath) : undefined
@@ -73,30 +86,35 @@ export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<
   if (!allPkgs.length) {
     throw new Error('no packages found in current project')
   }
+  const inputs = capturePackageInputs(allPkgs)
 
-  if (isPnpm) validateCatalogReferences(catalogs, allPkgs)
-  const latestVersions = await getLatestVersions(options.versionSource!, allPkgs, options.versionStrategy)
+  if (isPnpm) validateCatalogReferences(catalogs, inputs)
+  const { versions: latestVersions, targets } = await getLatestVersions(options.versionSource!, inputs.map(item => item.digest), options.versionStrategy, strict)
+  const skipped: ISyncSkipped[] = []
+  const customTransform = typeof options.versionRangeStrategy === 'function'
   const versionTransform = getVersionTransformer(options.versionRangeStrategy)
-  const catalogUpdate = planCatalogUpdates(catalogs, latestVersions, versionTransform, options.exact)
+  const catalogUpdate = planCatalogUpdates(catalogs, latestVersions, versionTransform, options.exact, skipped, customTransform)
   const manifestTransform = isPnpm
     ? (name: string, oldVersion: string, newVersion: string) => oldVersion.startsWith('catalog:') ? oldVersion : versionTransform(name, oldVersion, newVersion)
     : versionTransform
-  const pkgsUpdated = allPkgs.map((item): IChangedPackage | false => {
-    const changes = updatePackageJSON({
-      pkgDigest: item,
-      latestVersions,
-      versionTransform: manifestTransform,
-      checkOnly: options.checkOnly,
-      pkgVersion: latestVersions[item.name],
-      exact: options.exact
-    })
-    return changes && Object.assign({}, item, { changes })
-  }).filter((item): item is IChangedPackage => !!item)
+  const manifests = inputs.map(({ digest, content, manifest }) => planPackageJSON({
+    pkgDigest: digest, content, manifest,
+    latestVersions,
+    versionTransform: manifestTransform,
+    pkgVersion: latestVersions[digest.name],
+    exact: options.exact
+  }, skipped, customTransform))
+  const pkgsUpdated = manifests.map((item, index): IChangedPackage | false => item.changes && { ...inputs[index].digest, changes: item.changes })
+    .filter((item): item is IChangedPackage => !!item)
+  const files = manifests.map(item => item.file)
   if (catalogUpdate) {
-    if (!options.checkOnly) catalogUpdate.write()
     pkgsUpdated.push(catalogUpdate.change)
   }
-  return !!pkgsUpdated.length && pkgsUpdated
+  if (catalogs) files.push(catalogUpdate?.file || { path: catalogs.file, before: catalogs.content, after: catalogs.content })
+  return createSyncPlan({
+    command: 'synclocal', changes: pkgsUpdated, targets, unmatchedTargets: [],
+    skipped: skipped.filter(item => !isPnpm || !item.oldVersion.startsWith('catalog:')),
+  }, files, strict, false)
 }
 
 /**
@@ -107,7 +125,8 @@ export async function syncLocal(syncOptions: ISyncPackageOptions = {}): Promise<
 async function getLatestVersions(
   verSource: EVerSource,
   pkgs: IPackageDigest[],
-  versionStrategy?: IVersionPickStrategy
+  versionStrategy?: IVersionPickStrategy,
+  strict = false,
 ) {
   // local package versions
   const localVers: IVersionMap = {}
@@ -115,13 +134,16 @@ async function getLatestVersions(
     acc[cur.name] = cur.version
     return acc
   }, localVers)
-  if (verSource === EVerSource.LOCAL) return localVers
+  if (verSource === EVerSource.LOCAL) return {
+    versions: localVers,
+    targets: Object.entries(localVers).filter(([, version]) => !!version).map(([name, version]): ISyncTarget => ({ name, version, source: 'local' })),
+  }
 
   // versions info from npm
   let npmVers: IVersionMap = {}
   if (verSource !== EVerSource.GIT) {
     // can not get version from private package
-    npmVers = await getVersionsFromRegistry({ pkgNames: pkgs.filter(p => !p.private).map(item => item.name), versionStrategy })
+    npmVers = await getVersionsFromRegistry({ pkgNames: pkgs.filter(p => !p.private).map(item => item.name), versionStrategy, throwOnError: strict, allowMissing: true })
   }
 
   // versions info from git
@@ -130,6 +152,8 @@ async function getLatestVersions(
     const gitRoot = await getGitRoot()
     if (gitRoot) {
       gitVers = await getPackageVersionsFromGit(versionStrategy)
+    } else if (strict && verSource === EVerSource.GIT) {
+      throw new CIError('git-source-unavailable', 'Git version source requires a Git repository')
     }
   }
 
@@ -144,5 +168,10 @@ async function getLatestVersions(
     if (vers[item.name]) acc[item.name] = vers[item.name]
     return acc
   }, result)
-  return result
+  return {
+    versions: result,
+    targets: Object.entries(result).map(([name, version]): ISyncTarget => ({
+      name, version, source: localVers[name] === version ? 'local' : npmVers[name] === version ? 'registry' : 'git',
+    })),
+  }
 }
