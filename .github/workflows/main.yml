@@ -50,3 +50,52 @@ jobs:
       - run: pnpm build
       - run: npm install --prefix "${{ runner.temp }}/catalog-tools" --ignore-scripts --no-audit --no-fund pnpm@latest
       - run: node test/catalog-smoke.cjs "${{ runner.temp }}/catalog-tools/node_modules/.bin/pnpm"
+
+  github-release:
+    needs: [test, catalogs-latest]
+    if: >-
+      github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release lerna-ci ')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Create tag and release for the published npm version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          package_name=$(node -p "require('./package.json').name")
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists"
+            exit 0
+          fi
+          published=false
+          for attempt in $(seq 1 12); do
+            if npm view "$package_name@$version" version --json > published-version.json; then
+              if node -e 'const fs = require("fs"); if (JSON.parse(fs.readFileSync("published-version.json", "utf8")) !== process.argv[1]) process.exit(1)' "$version"; then
+                published=true
+                break
+              fi
+            fi
+            sleep 10
+          done
+          if [ "$published" != true ]; then
+            echo "npm does not contain $package_name@$version; release was not created" >&2
+            exit 1
+          fi
+          node - "$version" <<'NODE'
+          const fs = require('fs')
+          const version = process.argv[2]
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8')
+          const section = changelog.split(/^## /m).find(item => item.startsWith(version + ' — '))
+          if (!section) throw new Error('Missing release changelog for ' + version)
+          fs.writeFileSync('release-notes.md', section.slice(section.indexOf('\n') + 1).trim() + '\n')
+          NODE
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file release-notes.md

@@ -1,8 +1,6 @@
 # Changelog
 
-## 2.1.0 — Unreleased
-
-This release is prepared on the maintenance branch and has not been published to npm.
+## 2.1.0 — 2026-10-04
 
 ### Added
 

@@ -9,9 +9,6 @@ Align internal dependency ranges, apply chosen dependency versions across worksp
 and check Git, registry, and tag conflicts before a release. Use the CLI or compose
 these operations through the TypeScript/CommonJS API. Lerna is optional for synchronization.
 
-> This README describes the upcoming 2.1.0 release. The published 2.0.2 does not
-> include catalog support. See the [changelog](https://github.com/oe/lerna-ci/blob/main/CHANGELOG.md) for release status.
-
 - [Quick start](#quick-start)
 - [Choose a workflow](#choose-a-workflow)
 - [Commands](#commands)
