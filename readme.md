@@ -2,6 +2,10 @@
 
 [![CI](https://github.com/oe/lerna-ci/actions/workflows/main.yml/badge.svg)](https://github.com/oe/lerna-ci/actions)
 [![npm version](https://img.shields.io/npm/v/lerna-ci)](https://www.npmjs.com/package/lerna-ci)
+[![npm downloads](https://img.shields.io/npm/dm/lerna-ci)](https://www.npmjs.com/package/lerna-ci)
+[![License](https://img.shields.io/npm/l/lerna-ci)](https://github.com/oe/lerna-ci/blob/main/LICENSE)
+[![TypeScript](https://img.shields.io/badge/%3C%2F%3E-typescript-blue)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/npm/node/lerna-ci)](https://nodejs.org/)
 
 **Monorepo dependency synchronization and release preflight checks for pnpm, npm, and Yarn.**
 
