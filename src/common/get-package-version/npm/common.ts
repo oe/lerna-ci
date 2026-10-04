@@ -17,12 +17,10 @@ export type IGetPkgVersionFromRegistry = (options: IGetPkgVersionFromRegistryOpt
 
 /**
  * get the max stable version
- * @param versions version list, should be sorted from smallest to largest
+ * @param versions version list, ordering is not required
  */
 export function getMaxStableVersion(versions: string[], strategy: IVersionPickStrategy): string {
-  if (strategy === 'max') return versions.pop()!
-  return versions.reverse().find(v => {
-    const sv = semver.parse(v)
-    return sv && !sv.prerelease.length
-  }) || versions.pop()!
+  const sorted = versions.filter(v => !!semver.valid(v)).sort(semver.rcompare)
+  if (strategy === 'max') return sorted[0] || ''
+  return sorted.find(v => !semver.prerelease(v)) || sorted[0] || ''
 }

@@ -4,12 +4,12 @@
 
 import path from 'path'
 import { IPackageDigest } from '../types'
-import { getProjectRoot } from '../utils'
+import { getProjectRoot, readPackageJson } from '../utils'
 import { logger } from '../logger'
 import * as lerna from './lerna'
 import * as native from './native-client'
 
-export { isManagedByLerna } from './lerna'
+export { isManagedByLerna, isLernaAvailable } from './lerna'
 
 /** package filter object */
 export interface IPackageFilterObject {
@@ -26,59 +26,46 @@ export type IPackageFilterOptions = IPackageFilterObject | IPackageFilter
 /**
  * get all package's info in a lerna project
  */
-export async function getAllPackageDigests(filter?: IPackageFilterOptions): Promise<IPackageDigest[]> {
-  const result = await getAllPkgDigests()
+export async function getAllPackageDigests(filter?: IPackageFilterOptions, rootPath?: string): Promise<IPackageDigest[]> {
+  const result = await getAllPkgDigests(rootPath)
   if (!filter) return result
   if (typeof filter === 'object') {
     const filterOptions = filter
     filter = (pkg: IPackageDigest) => {
       // ignore private
       if (filterOptions.ignorePrivate && pkg.private) return false
-      if (filterOptions.keyword) pkg.name.indexOf(filterOptions.keyword) > -1
+      if (filterOptions.keyword && !pkg.name.includes(filterOptions.keyword)) return false
       return true
     }
   }
   return result.filter(filter)
 }
 
-let cachedDigests: IPackageDigest[]
-async function getAllPkgDigests() {
-  if (cachedDigests) return cachedDigests
-  let result = await lerna.getAllPackages()
+async function getAllPkgDigests(rootPath?: string) {
+  rootPath = rootPath || await getProjectRoot()
+  let result = await lerna.getAllPackages(rootPath)
   if (result === false) {
-    result = await native.getAllPackages()
+    result = await native.getAllPackages(rootPath)
   }
   if (!result) {
     logger.warn('[lerna-ci] unable to get workspace packages, maybe current project not a monorepo')
     result = []
   }
-  // root package is private by default
-  const selfPkgDigest = await getRootPackageDigest()
-  if (selfPkgDigest) result.push(selfPkgDigest)
-  cachedDigests = result
-  return cachedDigests
+  // Include the root package once.
+  const selfPkgDigest = await getRootPackageDigest(rootPath)
+  if (selfPkgDigest && !result.some(pkg => path.resolve(pkg.location) === path.resolve(selfPkgDigest.location))) result.push(selfPkgDigest)
+  return result
 }
 
 
-let rootRepoPkg: IPackageDigest | undefined | null
-/**
- * get package digest from repo root
- */
-export async function getRootPackageDigest(): Promise<IPackageDigest | null> {
-  if (typeof rootRepoPkg !== 'undefined') return rootRepoPkg
-  const rootPath = await getProjectRoot()
-  const defPkgPath = path.join(rootPath, 'package.json')
-  if (defPkgPath) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pkg = require(defPkgPath)
-    rootRepoPkg = {
-      name: pkg.name,
-      version: pkg.version,
-      private: pkg.private || false,
-      location: path.dirname(defPkgPath)
-    }
-  } else {
-    rootRepoPkg = null
+/** get package digest from repo root, reading the current manifest */
+export async function getRootPackageDigest(rootPath?: string): Promise<IPackageDigest> {
+  rootPath = rootPath || await getProjectRoot()
+  const pkg = readPackageJson(rootPath)
+  return {
+    name: pkg.name || '',
+    version: pkg.version || '',
+    private: !!pkg.private,
+    location: rootPath
   }
-  return rootRepoPkg
 }

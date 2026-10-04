@@ -56,7 +56,7 @@ export async function canPublish(options: ICanPushOptions): Promise<IPublishQual
   if (gitRoot) {
     await syncPruneGitTags()
   }
-  let changedPkgs: IPackageDigest[] = []
+  let changedPkgs: IPackageDigest[]
   try {
     changedPkgs = await getChanged()
     if (!changedPkgs.length) {
@@ -125,22 +125,21 @@ export interface IGitStatus {
 }
 
 async function checkGitLocalStatus(checkCommit?: boolean): Promise<IGitStatus> {
-  let gitStatus = await runShellCmd('git', ['status', '--porcelain'])
+  let gitStatus = await runShellCmd('git', ['status', '--porcelain'], { shell: false })
   gitStatus = gitStatus.trim()
   if (!gitStatus) return { status: 'clean' }
-  const messages = gitStatus.split('\n').map(l => l.trim())
+  const messages = gitStatus.split('\n')
+  const conflicts = messages.filter(l => /^(DD|AU|UD|UA|DU|AA|UU) /.test(l))
+  if (conflicts.length) {
+    return {
+      status: 'conflicts',
+      files: conflicts.map(l => l.slice(3))
+    }
+  }
   if (checkCommit) {
     return {
       status: 'uncommitted',
       files: messages
-    }
-  }
-  const conflicts = messages.filter(l => l.startsWith('C '))
-  if (conflicts.length) {
-    const conflictFiles = conflicts.map(l => l.replace('C ', ''))
-    return {
-      status: 'conflicts',
-      files: conflictFiles
     }
   }
   return { status: 'clean' }
@@ -152,15 +151,19 @@ export interface IGitSyncStatus {
 }
 
 async function checkGitSyncStatus(): Promise<IGitSyncStatus> {
-  const result = await runShellCmd('git', ['status', '-uno'])
-  // "ahead of remote" is ok, publish won't be blocked
-  if (result.includes('is up to date with') || result.includes('is ahead of')) return { isUp2dated: true }
-  const message = result.replace('Your branch', '')
-    .replace('On branch ', '')
-    .replace(/[\n\r]/g, ' ')
-  return {
-    isUp2dated: false,
-    message,
+  try {
+    const result = await runShellCmd('git', ['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'], { shell: false })
+    const [ahead, behind] = result.trim().split(/\s+/).map(Number)
+    if (!Number.isFinite(ahead) || !Number.isFinite(behind)) throw new Error('invalid Git revision counts')
+    return {
+      isUp2dated: behind === 0,
+      message: `local branch is ${ahead} commit(s) ahead and ${behind} commit(s) behind its upstream`,
+    }
+  } catch {
+    return {
+      isUp2dated: false,
+      message: 'unable to compare the local branch with its upstream; check the upstream configuration',
+    }
   }
 }
 
@@ -197,7 +200,7 @@ async function checkPkgVersionAvailable(meta: IPackageDigest, checkGit: boolean)
   if (!meta.version) return result
   if (checkGit) {
     const tagName = `${meta.name}@${meta.version}`
-    const tag = await runShellCmd('git', ['tag', '-l', tagName])
+    const tag = await runShellCmd('git', ['tag', '-l', tagName], { shell: false })
     if (tag.trim()) {
       result.available = false
       result.reasons = [ 'git' ]
@@ -205,7 +208,7 @@ async function checkPkgVersionAvailable(meta: IPackageDigest, checkGit: boolean)
   }
   // only check public package for version
   if (!meta.private) {
-    const version = await getVersionFormRegistry({pkgName: meta.name, version: meta.version})
+    const version = await getVersionFormRegistry({pkgName: meta.name, version: meta.version, throwOnError: true})
     if (version) {
       result.available = false
       result.reasons = (result.reasons || []).concat(['npm'])
@@ -225,7 +228,7 @@ function getNextVersion(options: IGetNextVersionOptions) {
   if (!options.version) return options.version
   const releaseType = options.releaseType || 'patch'
   const identifier = /^pre/.test(options.releaseType) ? (options.period || 'alpha') : undefined
-  const ver = semver.inc(options.version, releaseType, identifier)
+  const ver = semver.inc(options.version, releaseType, undefined, identifier)
   if (ver === null) {
     throw new Error(`package ${options.pkgName}'s version ${options.version} is invalid, unable to get its next version`)
   }

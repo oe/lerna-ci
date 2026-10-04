@@ -1,7 +1,8 @@
 import path from 'path'
 import fs from 'fs'
 import semver from 'semver'
-import child_process, { type SpawnOptions } from 'child_process'
+import { type SpawnOptions } from 'child_process'
+import spawn from 'cross-spawn'
 import { IPackageDigest } from './types'
 
 /**
@@ -14,7 +15,7 @@ export const isWin = /^win/.test(process.platform)
 
 
 /**
- * run local shell command with spawn
+ * run a shell command; use shell:false to pass literal command arguments
  *  resolve with command exec outputs if cmd return 0, or reject with error message
  * @param  {String} cmd     cmd name
  * @param  {Array<String>} args    args list
@@ -27,7 +28,7 @@ export function runShellCmd (cmd: string, args?: string[] | SpawnOptions, option
     options = args
     args = []
   }
-  const task = child_process.spawn(
+  const task = spawn(
     cmd,
     // @ts-ignore
     args,
@@ -44,21 +45,21 @@ export function runShellCmd (cmd: string, args?: string[] | SpawnOptions, option
     // record response content
     const stdout: (string | Buffer)[] = []
     const stderr: (string | Buffer)[] = []
-    task.stdout!.on('data', data => {
+    task.stdout?.on('data', data => {
       stdout.push(data)
     })
-    task.stderr!.on('data', data => {
+    task.stderr?.on('data', data => {
       stderr.push(data)
     })
 
     // listen on error, to aviod command crash
-    task.on('error', () => {
-      reject(stderr.join('').toString())
+    task.on('error', error => {
+      reject(error)
     })
 
-    task.on('exit', code => {
-      if (code) {
-        stderr.unshift(`error code: ${code}\n`)
+    task.on('close', (code, signal) => {
+      if (code !== 0) {
+        stderr.unshift(`error code: ${code}${signal ? `, signal: ${signal}` : ''}\n`)
         reject(stderr.join('').toString())
       } else {
         resolve(stdout.join('').toString())
@@ -75,8 +76,8 @@ export function runShellCmd (cmd: string, args?: string[] | SpawnOptions, option
  */
 export function findFileRecursive (fileName: string | string[], dir = process.cwd(), isDir = false): string {
   // const filepath = path.join(dir, fileName)
-  const fileNames = Array.isArray(fileName) ? fileName : [fileName]
-  let f: string | undefined = ''
+  const fileNames = Array.isArray(fileName) ? fileName.slice() : [fileName]
+  let f: string | undefined
   // tslint:disable-next-line:no-conditional-assignment
   while ((f = fileNames.shift())) {
     const filepath = path.join(dir, f)
@@ -84,7 +85,7 @@ export function findFileRecursive (fileName: string | string[], dir = process.cw
       const stat = fs.statSync(filepath)
       const isFound = isDir ? stat.isDirectory() : stat.isFile()
       if (isFound) return filepath
-    } catch (e) {
+    } catch {
       // xxx
     }
   }
@@ -97,7 +98,7 @@ export function findFileRecursive (fileName: string | string[], dir = process.cw
 /** run npm command via npx */
 export async function runNpmCmd(...args: string[]) {
   const rootPath = await getProjectRoot()
-  return runShellCmd(isWin ? 'npx.cmd' : 'npx', args, { cwd: rootPath })
+  return runShellCmd(isWin ? 'npx.cmd' : 'npx', args, { cwd: rootPath, shell: false })
 }
 
 export async function readRootPkgJson() {
@@ -105,39 +106,42 @@ export async function readRootPkgJson() {
   return readPackageJson(rootRepo)
 }
 
-let projectRoot: string
 /**
  * get current project root dir
  */
 export async function getProjectRoot(): Promise<string> {
-  if (projectRoot) return projectRoot
   const gitRoot = await getGitRoot()
-  if (gitRoot && fs.existsSync(path.join(gitRoot, 'package.json'))) {
-    projectRoot = gitRoot
-  } else {
-    const defPkgPath = findFileRecursive('package.json', process.cwd())
-    projectRoot = path.dirname(defPkgPath)
+  const workspaceFile = findFileRecursive('pnpm-workspace.yaml')
+  // Compare physical paths: Git may expand Windows 8.3 names or symlink aliases.
+  const relativeWorkspace = gitRoot && workspaceFile
+    ? path.relative(fs.realpathSync.native(gitRoot), fs.realpathSync.native(path.dirname(workspaceFile))) : ''
+  const workspaceWithinGit = !path.isAbsolute(relativeWorkspace) && !relativeWorkspace.split(path.sep).includes('..')
+  if (workspaceFile && workspaceWithinGit && fs.existsSync(path.join(path.dirname(workspaceFile), 'package.json'))) {
+    const workspaceRoot = path.dirname(workspaceFile)
+    const pkg = readPackageJson(workspaceRoot)
+    if (!pkg.packageManager || pkg.packageManager.startsWith('pnpm@')) return workspaceRoot
   }
-  if (!projectRoot) {
+  if (gitRoot && fs.existsSync(path.join(gitRoot, 'package.json'))) {
+    return gitRoot
+  }
+  const defPkgPath = findFileRecursive('package.json', process.cwd())
+  if (!defPkgPath) {
     throw new Error('unable to determine project root path')
   }
-  return projectRoot
+  return path.dirname(defPkgPath)
 }
 
-let gitRootPath: string | false
 
 /**
  * get git root path, return false if not in git repo
  */
 export async function getGitRoot(): Promise<string | false> {
-  if (gitRootPath !== undefined) return gitRootPath
   try {
-    const result = await runShellCmd('git', ['rev-parse', '--show-toplevel'])
-    gitRootPath = result.trim()
-  } catch (error) {
-    gitRootPath = false
+    const result = await runShellCmd('git', ['rev-parse', '--show-toplevel'], { shell: false })
+    return result.trim()
+  } catch {
+    return false
   }
-  return gitRootPath
 }
 
 
@@ -147,7 +151,7 @@ export function pickOne<V>(list: V[], compare: ((a: V, b: V) => number)): V | un
   const arr = list.slice(0)
   return arr.reduce((acc, cur) => {
     return compare(acc, cur) >= 0 ? acc : cur
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
   }, arr.shift()!)
 }
 
@@ -159,7 +163,7 @@ export function maxVersion(...vers: (string | undefined)[]) {
 /**
  * get parsed package.json in a package
  * @param pkgPath package location
- * @returns 
+ * @returns
  */
 export function readPackageJson(pkgPath: string) {
   const pkgJsonPath = path.join(pkgPath, 'package.json')
@@ -170,7 +174,7 @@ export function readPackageJson(pkgPath: string) {
   try {
     const content = fs.readFileSync(pkgJsonPath, 'utf8')
     return JSON.parse(content)
-  } catch (error) {
+  } catch {
     throw new Error(`project root's package.json is corrupted, located in ${pkgPath}`)
   }
 }
@@ -179,7 +183,7 @@ export function readPackageJson(pkgPath: string) {
  * // sync all tags from remote, and prune no-exists tags in locale
  */
 export async function syncPruneGitTags() {
-  await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'])
+  await runShellCmd('git', ['fetch', 'origin', '--prune', '--tags'], { shell: false })
 }
 
 function getPackageDependencies(pkgDigest: IPackageDigest, unique?: boolean) {

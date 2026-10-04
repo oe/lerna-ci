@@ -15,6 +15,7 @@ import {
   getAllPackageDigests,
   CIError,
 } from '../common'
+import { cleanUpLernaCliOutput } from '../common/get-all-packages/lerna'
 
 export async function getChanged() {
   const isUsingLerna = await isManagedByLerna()
@@ -28,7 +29,7 @@ export async function getChanged() {
   }
   const usingChangeset = await isUsingChangeset()
   if (usingChangeset) {
-    logger.info('using lerna to detect changed packages')
+    logger.info('using changesets to detect changed packages')
     return await getChangedByChangeset()
   }
   throw new CIError('not-support', 'only support lerna and changeset to retrieve changed packages')
@@ -37,7 +38,7 @@ export async function getChanged() {
 async function getChangedByLerna() {
   try {
     const result = await runNpmCmd('--no-install', 'lerna', 'changed', '--json')
-    return JSON.parse(result) as IPackageDigest[]
+    return JSON.parse(cleanUpLernaCliOutput(result)) as IPackageDigest[]
   } catch (error) {
     // @ts-ignore
     if (/is already released/i.test(error)) return []
@@ -46,8 +47,9 @@ async function getChangedByLerna() {
 }
 
 async function getChangedByChangeset() {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lerna-ci-changeset-'))
+  const tempFile = path.join(tempDir, 'status.json')
   try {
-    const tempFile = path.join(os.tmpdir(), 'changeset-status')
     await runNpmCmd('--no-install', 'changeset', 'status', '--output', tempFile)
     const allPkgs = await getAllPackageDigests()
     const content = fs.readFileSync(tempFile, 'utf-8')
@@ -56,6 +58,9 @@ async function getChangedByChangeset() {
     return allPkgs.filter(pkg => changedPkgNames.includes(pkg.name))
   } catch (error) {
     throw new CIError('changeset-error', error as string)
+  } finally {
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile)
+    fs.rmdirSync(tempDir)
   }
 }
 
@@ -63,4 +68,3 @@ async function isUsingChangeset() {
   const root = await getProjectRoot()
   return fs.existsSync(path.join(root, '.changeset'))
 }
-

@@ -1,54 +1,80 @@
 {
   "name": "lerna-ci",
-  "version": "2.0.2",
-  "description": "The essential toolkit for monorepo managed by lerna",
+  "version": "2.1.0",
+  "description": "Monorepo dependency synchronization and release preflight checks for pnpm, npm, and Yarn",
   "author": "Saiya",
   "repository": "https://github.com/oe/lerna-ci.git",
+  "homepage": "https://github.com/oe/lerna-ci#readme",
+  "bugs": {
+    "url": "https://github.com/oe/lerna-ci/issues"
+  },
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "bin": "./dist/bin/index.js",
   "scripts": {
-    "dev": "ts-node test/index.ts",
-    "clean": "rimraf ./dist",
-    "prebuild": "yarn run lint && yarn run clean",
-    "build": "tsc && chmod +x dist/bin/index.js",
-    "prepublish": "yarn run build",
-    "lint-message": "echo 'lint code before commit'",
-    "lint": "eslint './src/**/*.{ts,tsx}'",
-    "release": "yarn build && yarn publish"
+    "dev": "tsx test/index.ts",
+    "dev:build": "vite build --watch",
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tools.json",
+    "build": "vite build && tsc -p tsconfig.build.json && node scripts/prepare-dist.cjs",
+    "prepack": "pnpm run lint && tsc -p tsconfig.tools.json && pnpm run build",
+    "test": "pnpm run lint && tsc -p tsconfig.tools.json && pnpm run build && node test/regression.cjs",
+    "test:regression": "node test/regression.cjs",
+    "release": "pnpm publish",
+    "test:package": "pnpm pack --out pack.tgz && node test/package-smoke.cjs pack.tgz",
+    "test:catalog": "node test/catalog-smoke.cjs"
   },
   "dependencies": {
-    "@types/semver": "^7.3.9",
-    "@types/yargs": "^17.0.13",
-    "cosmiconfig": "^7.0.1",
-    "detect-indent": "^6.0.0",
-    "find-packages": "^9.0.10",
+    "cosmiconfig": "^8.3.6",
+    "cross-spawn": "^7.0.6",
+    "detect-indent": "^6.1.0",
+    "find-packages": "^10.0.4",
     "fixpack": "^4.0.0",
-    "picocolors": "^1.0.0",
-    "semver": "^7.3.5",
-    "yargs": "^17.5.1"
+    "picocolors": "^1.1.1",
+    "semver": "^7.8.5",
+    "yaml": "^2.9.1",
+    "yargs": "^17.7.3"
   },
   "devDependencies": {
-    "@types/node": "14",
-    "@typescript-eslint/eslint-plugin": "^5.5.0",
-    "@typescript-eslint/parser": "^5.5.0",
-    "eslint": "^8.4.0",
-    "rimraf": "^2.6.2",
-    "ts-node": "^10.4.0",
-    "typescript": "^4.5.2"
+    "@eslint/js": "^10.0.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/cross-spawn": "^6.0.6",
+    "@types/node": "^22.0.0",
+    "@types/semver": "^7.8.0",
+    "@types/yargs": "^17.0.35",
+    "eslint": "^10.12.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vite": "^8.3.2"
   },
   "engines": {
-    "node": ">=8"
+    "node": ">=14.6"
   },
   "keywords": [
-    "ci/cd",
+    "dependencies",
+    "dependency-sync",
+    "dependency-updates",
+    "workspaces",
+    "package-json",
+    "semver",
+    "catalogs",
+    "pnpm-catalog",
+    "release",
+    "preflight",
+    "changesets",
+    "ci",
     "lerna",
     "yarn",
     "pnpm",
     "npm",
-    "lerna-ci",
-    "monorepo",
-    "toolkit"
+    "monorepo"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "packageManager": "pnpm@10.34.6",
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ]
 }

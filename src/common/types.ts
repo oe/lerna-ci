@@ -1,7 +1,7 @@
 /**
  * package version data source
  */
-export const enum EVerSource {
+export enum EVerSource {
   /** both npm and git */
   ALL = 'all',
   /** from monorepo itself */
@@ -44,13 +44,13 @@ export type IVersionPickStrategy = 'max' | 'latest' | 'max-stable'
 /**
  * custom version transform
  */
-export type IVerTransform = (name: string, newVersion: string, oldVersion: string) => string
+export type IVerTransform = (name: string, oldVersion: string, newVersion: string) => string
 
 /**
  * upgrade version strategy
  *  retain: retain the original version range
  */
-export type IUpgradeVersionStrategy = '>' | '~' | '^' | '>=' | '' | 'retain' | IVerTransform 
+export type IUpgradeVersionStrategy = '>' | '~' | '^' | '>=' | '' | 'retain' | IVerTransform
 /**
  * version transform strategy
  *  '' for exact version
